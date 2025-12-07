@@ -1,0 +1,4 @@
+requests
+smolagents
+openai 
+dotenv

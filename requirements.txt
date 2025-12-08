@@ -1,4 +1,9 @@
 requests
 smolagents
-openai 
-dotenv
+openai
+python-dotenv
+qdrant-client
+langchain-openai
+langchain-community
+langchain-core
+httpx

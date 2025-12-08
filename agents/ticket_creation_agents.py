@@ -200,11 +200,68 @@ class TicketExecutorAgent:
         from tools.ticket_creationtion_tools import create_ticket_tool
         create_ticket = create_ticket_tool()
         
+        # Import cosmic database tool
+        from tools.vector_database_tools import cosmic_database_tool2
+        import asyncio
+        
         # Create tool wrappers for agent calls
         from smolagents import tool
         
         # Store state reference for tools to access
         self._current_state = None
+        
+        @tool
+        def search_cosmic_database(user_question: str) -> str:
+            """
+            Call this tool to search the cosmic medical journalling system database for information.
+            Use this when the user asks questions about:
+            - Cosmic system procedures, workflows, or features
+            - Medical documentation requirements
+            - How to perform tasks in Cosmic
+            - System functionality, settings, or configurations
+            - Any question related to the Cosmic medical journalling system
+            
+            DO NOT use this for:
+            - Small talk or greetings
+            - Questions unrelated to Cosmic system
+            - General IT problems (use identify_known_problem instead)
+            
+            Args:
+                user_question: The user's question about the Cosmic system
+            """
+            print("\n[Tool: search_cosmic_database] Called by executor agent")
+            try:
+                # Store the cosmic query in state for potential ticket creation
+                if self._current_state is not None:
+                    self._current_state["last_cosmic_query"] = user_question
+                    print(f"[Tool: search_cosmic_database] Stored cosmic query: {user_question}")
+                
+                # Run async function
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
+                try:
+                    result = loop.run_until_complete(
+                        cosmic_database_tool2(user_question)
+                    )
+                finally:
+                    loop.close()
+                
+                # Format the response
+                if result.get("success"):
+                    answer = result.get("message", "I couldn't find relevant information in the Cosmic database.")
+                    sources = result.get("sources", [])
+                    response_text = answer
+                    if sources:
+                        response_text += f"\n\nSources: {', '.join(sources)}"
+                    return response_text
+                else:
+                    error = result.get("error", "Unknown error occurred")
+                    return f"I couldn't find relevant information in the Cosmic database. {error}"
+            except Exception as e:
+                print(f"[Tool: search_cosmic_database] Error: {str(e)}")
+                import traceback
+                traceback.print_exc()
+                return f"An error occurred while searching the Cosmic database: {str(e)}"
         
         @tool
         def identify_known_problem(user_message: str) -> str:
@@ -246,13 +303,14 @@ class TicketExecutorAgent:
             return json.dumps(result)
         
         # Store tools for access
+        self.cosmic_tool = search_cosmic_database
         self.identify_tool = identify_known_problem
         self.update_tool = update_ticket
         self.create_ticket_tool = create_ticket
         
         # Initialize executor agent with tools
         self.executor = ToolCallingAgent(
-            tools=[identify_known_problem, update_ticket, create_ticket],
+            tools=[search_cosmic_database, identify_known_problem, update_ticket, create_ticket],
             model=model,
             verbosity_level=1  # Enable verbose output
         )
@@ -316,8 +374,8 @@ class TicketExecutorAgent:
         response = self.executor.run(prompt)
         assistant_reply = str(response)
         
-        # Initialize result with current state
-        updated_state = state.copy()
+        # Initialize result with current state (which may have been updated by tools)
+        updated_state = self._current_state.copy() if self._current_state is not None else state.copy()
         result = {
             "assistant_reply": assistant_reply,
             "updated_state": updated_state,

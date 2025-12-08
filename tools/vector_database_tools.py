@@ -12,11 +12,23 @@ from langchain_openai import OpenAIEmbeddings
 import traceback
 from dotenv import load_dotenv, find_dotenv
 from openai import OpenAI
-from ask_qdrant import ask_question, HybridResult
-from rag import generate_answer
 import httpx
 import requests
+from pathlib import Path
+
+# Add parent directory and tools directory to path
+tools_dir = Path(__file__).parent
+parent_dir = tools_dir.parent
+sys.path.insert(0, str(parent_dir))
+sys.path.insert(0, str(tools_dir))
+
 import config
+
+# Import tools modules - now they're in the path
+import ask_qdrant
+from ask_qdrant import ask_question, HybridResult
+import rag
+from rag import generate_answer
 
 load_dotenv(find_dotenv())
 

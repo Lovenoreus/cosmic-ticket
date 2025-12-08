@@ -14,10 +14,6 @@ from langchain_core.runnables.utils import ConfigurableField
 from openai import OpenAI
 from qdrant_client import QdrantClient
 from qdrant_client.http import models as rest
-import sys
-from pathlib import Path
-# Add parent directory to path to import root config
-sys.path.insert(0, str(Path(__file__).parent.parent))
 import config 
 import httpx
 

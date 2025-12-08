@@ -128,7 +128,7 @@
       "queue": "Technical Support",
       "issue_category": "Medical equipment malfunction",
       "urgency_level": "high",
-      "description": "Covers malfunctioning medical or patient-use equipment, including adjustable beds, lifts, exam chairs, chairs, oxygen flow meters, monitors, and remotes. Typical issues include unresponsive controls, electrical faults, physical damage, broken parts, or intermittent behavior.",
+      "description": "Covers malfunctioning medical or patient-use equipment, including adjustable beds, lifts, exam chairs, oxygen flow meters, monitors, and remotes. Typical issues include unresponsive controls, electrical faults, physical damage, broken parts, or intermittent behavior.",
       "questions_to_ask": [
         "Do you know the exact model and serial number of the equipment?",
         "What specific symptoms or errors is the equipment displaying?",

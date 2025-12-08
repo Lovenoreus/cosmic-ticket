@@ -71,15 +71,6 @@ def run_bot():
     
     history = []
     
-    # Initialize state dict for executor (will be updated during conversation)
-    state_dict = {
-        "ticket_state": ticket_state,
-        "questions": questions,
-        "answered": answered,
-        "conversation_history": history,
-        "last_cosmic_query": ""
-    }
-    
     # Initialize agents
     identify_agent = IdentifyKnownProblemAgent(llm_model)
     update_agent = UpdateTicketAgent(llm_model)
@@ -106,84 +97,13 @@ def run_bot():
             # MODE 1: NORMAL CHAT (ticket_mode = false)
             # ========================================
             if not ticket_mode:
-                # Use executor to handle conversation - it will handle cosmic queries and problem identification
-                print("\n[Main] Normal chat mode - Processing with executor agent...")
-                
-                # Update state_dict with current values and preserve last_cosmic_query
-                # Get the last cosmic query from the existing state_dict if it exists
-                last_cosmic = state_dict.get("last_cosmic_query", "") if 'state_dict' in locals() and isinstance(state_dict, dict) else ""
-                state_dict = {
-                    "ticket_state": ticket_state,
-                    "questions": questions,
-                    "answered": answered,
-                    "conversation_history": history,
-                    "last_cosmic_query": last_cosmic
-                }
-                
+                # Check if user mentions a problem - use identify agent
+                print("\n[Main] Normal chat mode - Checking if user mentioned a problem...")
                 start_time = time.time()
-                result = executor_agent.process(user_msg, state_dict, ticket_mode=False)
+                identify_result = identify_agent.identify(user_msg, KNOWN_QUESTIONS)
                 elapsed_time = time.time() - start_time
                 
-                # Update state from executor result
-                updated_state = result.get("updated_state", state_dict)
-                state_dict = updated_state.copy()
-                
-                assistant_reply = result.get("assistant_reply", "I'm here to help. How can I assist you?")
-                print(f"\n{assistant_reply} [{elapsed_time:.2f}s]\n")
-                history.append({"role": "assistant", "content": assistant_reply})
-                
-                # Check if executor identified a problem category (from identify_known_problem tool call)
-                # Try to extract selected_category from response
-                selected_category = None
-                try:
-                    if "selected_category" in assistant_reply:
-                        import re
-                        json_match = re.search(r'\{"selected_category"[^}]+\}', assistant_reply)
-                        if json_match:
-                            identify_json = json.loads(json_match.group())
-                            selected_category = identify_json.get("selected_category")
-                            if selected_category:
-                                print(f"\n[Main] Extracted category from executor response: {selected_category}")
-                except Exception as e:
-                    pass
-                
-                # Check if user explicitly wants to create a ticket
-                user_lower = user_msg.lower().strip()
-                explicit_ticket_intent = (
-                    "create ticket" in user_lower or 
-                    "file a ticket" in user_lower or
-                    "file ticket" in user_lower or
-                    "need to create a ticket" in user_lower or
-                    "want to create a ticket" in user_lower or
-                    "let's create a ticket" in user_lower or
-                    "please create a ticket" in user_lower or
-                    "i want to report" in user_lower or
-                    "i need to report" in user_lower or
-                    "start a ticket" in user_lower or
-                    "open a ticket" in user_lower or
-                    "submit a ticket" in user_lower
-                )
-                
-                # If executor identified a category OR user wants to create ticket, proceed to ticket creation
-                if selected_category or explicit_ticket_intent:
-                    # If we don't have a category yet but user wants ticket, identify it
-                    if not selected_category and explicit_ticket_intent:
-                        # Use last cosmic query if available, otherwise use current message
-                        problem_description = state_dict.get("last_cosmic_query", user_msg)
-                        if not problem_description:
-                            # Look for original problem in conversation history
-                            ticket_keywords = ["create ticket", "file ticket", "report", "submit ticket", "open ticket", "start ticket"]
-                            for msg in reversed(history):
-                                if msg.get("role") == "user":
-                                    msg_content = msg.get("content", "").lower()
-                                    is_ticket_request = any(keyword in msg_content for keyword in ticket_keywords)
-                                    if not is_ticket_request and len(msg.get("content", "")) > 20:
-                                        problem_description = msg.get("content", "")
-                                        break
-                        
-                        print(f"\n[Main] User wants to create ticket - Identifying problem category...")
-                        identify_result = identify_agent.identify(problem_description, KNOWN_QUESTIONS)
-                        selected_category = identify_result.get("selected_category")
+                selected_category = identify_result.get("selected_category")
                 
                 if selected_category:
                     # Find the matching issue from known_questions.json
@@ -201,17 +121,12 @@ def run_bot():
                         answered = [False] * len(questions)
                         print(f"[Main] Total questions to ask: {len(questions)}")
                         
-                        # Use last cosmic query if available for ticket description, otherwise use user message
-                        problem_description = state_dict.get("last_cosmic_query", user_msg)
-                        if not problem_description:
-                            problem_description = user_msg
-                        
                         # Fill in ticket base fields
                         ticket_state["assigned_queue"] = issue["queue"]
                         ticket_state["category"] = issue["issue_category"]
                         ticket_state["priority"] = issue["urgency_level"]
-                        ticket_state["description"] = problem_description
-                        ticket_state["conversation_topic"] = problem_description
+                        ticket_state["description"] = user_msg
+                        ticket_state["conversation_topic"] = user_msg
                         
                         ticket_mode = True
                         
@@ -219,7 +134,7 @@ def run_bot():
                         unanswered_indices = [i for i in range(len(questions)) if not answered[i]]
                         if unanswered_indices:
                             initial_update = update_agent.update(
-                                problem_description,
+                                user_msg,
                                 ticket_state,
                                 questions,
                                 unanswered_indices
@@ -260,10 +175,24 @@ def run_bot():
                     else:
                         print(f"I couldn't find the selected category. Could you describe the problem again? [{elapsed_time:.2f}s]\n")
                         continue
-                
-                # No problem identified and no ticket intent - response already provided above
-                # Just continue to next user input (don't call executor again!)
-                continue
+                else:
+                    # No problem identified - normal conversation
+                    # Use executor for general conversation
+                    print("\n[Main] No problem identified - Using executor for general conversation")
+                    state_dict = {
+                        "ticket_state": ticket_state,
+                        "questions": questions,
+                        "answered": answered,
+                        "conversation_history": history
+                    }
+                    start_time = time.time()
+                    result = executor_agent.process(user_msg, state_dict, ticket_mode=False)
+                    elapsed_time = time.time() - start_time
+                    
+                    assistant_reply = result.get("assistant_reply", "I'm here to help. How can I assist you?")
+                    print(f"\n{assistant_reply} [{elapsed_time:.2f}s]\n")
+                    history.append({"role": "assistant", "content": assistant_reply})
+                    continue
             
             # ========================================
             # MODE 2: TICKET MODE

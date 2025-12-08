@@ -10,18 +10,9 @@ from dotenv import load_dotenv
 from openai import OpenAI
 from langchain_community.chat_models import ChatOllama
 from langchain_core.messages import SystemMessage, HumanMessage
-from pathlib import Path
 
-# Add parent directory to path to import root config first
-sys.path.insert(0, str(Path(__file__).parent.parent))
+from ask_qdrant import ask_question, HybridResult
 import config
-
-# Import tools modules - try relative first, then absolute
-try:
-    from .ask_qdrant import ask_question, HybridResult
-except ImportError:
-    # Fallback for when running as script
-    from tools.ask_qdrant import ask_question, HybridResult
 
 # Inject truststore for SSL certificate handling (self-signed certificates) - only if using Ollama
 if config.USE_OLLAMA:

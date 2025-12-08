@@ -3,6 +3,7 @@ Agents for ticket creation functionality
 """
 import os
 import json
+import asyncio
 from smolagents import ToolCallingAgent
 from smolagents.models import OpenAIServerModel
 from openai import OpenAI
@@ -185,6 +186,87 @@ class UpdateTicketAgent:
         return result
 
 
+class AnswerCosmicQuestionsAgent:
+    """Agent specialized in answering questions using the cosmic database"""
+    
+    def __init__(self, model):
+        self.model = model
+        self.prompt_template = load_prompt("answer_cosmic_questions")
+        # Get API key from model if available, or from environment
+        try:
+            if hasattr(model, 'api_key') and model.api_key:
+                self.api_key = model.api_key
+            else:
+                self.api_key = os.environ.get("OPENAI_API_KEY")
+        except:
+            self.api_key = os.environ.get("OPENAI_API_KEY")
+        self.openai_client = OpenAI(api_key=self.api_key) if self.api_key else None
+    
+    def answer(self, user_question: str) -> dict:
+        """
+        Answer a user question using the cosmic database.
+        
+        Args:
+            user_question: The user's question
+            
+        Returns:
+            Dictionary with answer, success status, and sources
+        """
+        print(f"\n[AnswerCosmicQuestionsAgent] Querying cosmic database for: {user_question}")
+        
+        try:
+            # Import the tool function
+            from tools.vector_database_tools import cosmic_database_tool2
+            
+            # Run the async function
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            try:
+                result = loop.run_until_complete(
+                    cosmic_database_tool2(user_question)
+                )
+            finally:
+                loop.close()
+            
+            print(f"[AnswerCosmicQuestionsAgent] Query result - success: {result.get('success', False)}")
+            
+            if result.get("success"):
+                answer = result.get("message", "I couldn't find a specific answer in the documentation.")
+                sources = result.get("sources", [])
+                result_count = result.get("result_count", 0)
+                
+                # Format the response
+                response = {
+                    "answer": answer,
+                    "success": True,
+                    "sources": sources,
+                    "result_count": result_count
+                }
+                
+                print(f"[AnswerCosmicQuestionsAgent] Found {result_count} results from {len(sources)} source(s)")
+                return response
+            else:
+                error = result.get("error", "Unknown error occurred")
+                print(f"[AnswerCosmicQuestionsAgent] Query failed: {error}")
+                return {
+                    "answer": f"I couldn't find relevant information in the cosmic database. {error}",
+                    "success": False,
+                    "sources": [],
+                    "result_count": 0
+                }
+                
+        except Exception as e:
+            print(f"[AnswerCosmicQuestionsAgent] Error: {str(e)}")
+            import traceback
+            traceback.print_exc()
+            return {
+                "answer": f"An error occurred while querying the cosmic database: {str(e)}",
+                "success": False,
+                "sources": [],
+                "result_count": 0
+            }
+
+
 class TicketExecutorAgent:
     """Main executor agent that orchestrates ticket creation"""
     
@@ -195,6 +277,7 @@ class TicketExecutorAgent:
         # Initialize specialized agents
         self.identify_agent = IdentifyKnownProblemAgent(model)
         self.update_agent = UpdateTicketAgent(model)
+        self.cosmic_agent = AnswerCosmicQuestionsAgent(model)
         
         # Create tools
         from tools.ticket_creationtion_tools import create_ticket_tool
@@ -205,6 +288,30 @@ class TicketExecutorAgent:
         
         # Store state reference for tools to access
         self._current_state = None
+        
+        @tool
+        def answer_cosmic_questions(user_question: str) -> str:
+            """
+            Call this tool to answer user questions using the cosmic database.
+            Use this when the user asks a question or describes an issue that might be answered
+            from the cosmic documentation database.
+            
+            Args:
+                user_question: The user's question or issue description
+            """
+            print("\n[Tool: answer_cosmic_questions] Called by executor agent")
+            result = self.cosmic_agent.answer(user_question)
+            
+            # Format the response for the executor
+            if result.get("success"):
+                answer = result.get("answer", "")
+                sources = result.get("sources", [])
+                response_text = answer
+                if sources:
+                    response_text += f"\n\nSources: {', '.join(sources)}"
+                return response_text
+            else:
+                return result.get("answer", "I couldn't find relevant information.")
         
         @tool
         def identify_known_problem(user_message: str) -> str:
@@ -252,7 +359,7 @@ class TicketExecutorAgent:
         
         # Initialize executor agent with tools
         self.executor = ToolCallingAgent(
-            tools=[identify_known_problem, update_ticket, create_ticket],
+            tools=[answer_cosmic_questions, identify_known_problem, update_ticket, create_ticket],
             model=model,
             verbosity_level=1  # Enable verbose output
         )

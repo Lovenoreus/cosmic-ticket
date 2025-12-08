@@ -642,5 +642,49 @@
         "Is there backup equipment available while repairs are being made?"
       ],
       "text": "Housekeeping and environmental services issue protocol for Servicedesk. Covers vacuum cleaners, floor cleaning machines, waste management systems, and sanitation equipment supporting infection control and hospital cleanliness. Essential questions: specific equipment malfunction, impact on patient area sanitation, infection control concerns, number of affected areas or floors, and backup equipment availability."
+    },
+    {
+      "source_file": "hospital_support_questions.json",
+      "section": "Patient Administration",
+      "page": 11,
+      "section_id": "11.1",
+      "main_section_id": "11",
+      "context_summary": "Protocol for manually registering a deceased patient in Cosmic, verifying legal documentation, updating patient status, and ensuring correct administrative follow-up including Master Population updates for patients without complete Swedish personal numbers.",
+      "keywords": [
+        "deceased registration",
+        "patient administration",
+        "Cosmic",
+        "EyeDoc",
+        "death certificate",
+        "master population",
+        "reservnummer",
+        "patient status",
+        "manual registration",
+        "administration process"
+      ],
+      "content_type": "support_protocol",
+      "hierarchical_tags": [
+        "Patient Administration",
+        "Clinical Documentation",
+        "Legal and Regulatory Compliance",
+        "Cosmic Workflows"
+      ],
+      "clinical_domain": [
+        "Hospital Operations",
+        "Medical Records",
+        "Administrative Services"
+      ],
+      "queue": "Patient Administration",
+      "issue_category": "Manual deceased patient registration",
+      "urgency_level": "high",
+      "description": "Covers the workflow for verifying death documentation, manually marking a patient as deceased in Cosmic, recording the correct date and time of death, and ensuring required administrative updates including Master Population entries for patients without complete Swedish personal identity numbers.",
+      "questions_to_ask": [
+        "Has the official death certificate been issued and verified in EyeDoc?",
+        "When was the patient confirmed deceased?",
+        "Has the deceased status been updated in the patient's Cosmic record?",
+        "Does the patient have a full Swedish personal identity number, or a temporary/coordination number?",
+        "Has Master Population (Master Befolkning) been updated with the required death notation?"
+      ],
+      "text": "Manual deceased patient registration protocol. Covers verification of death certificate in EyeDoc, marking the patient as deceased in Cosmic, recording the time of death, and performing administrative follow-up actions. Includes updating Master Population for patients with incomplete Swedish personal numbers by entering 'Deceased (date)' in the comment field."
     }
   ]

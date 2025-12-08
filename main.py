@@ -7,12 +7,16 @@ import json
 import time
 from smolagents.models import OpenAIServerModel
 from dotenv import load_dotenv
+from smolagents import ToolCallingAgent
 from agents.ticket_creation_agents import (
     IdentifyKnownProblemAgent,
     UpdateTicketAgent,
-    TicketExecutorAgent
+    AnswerCosmicQuestionsAgent
 )
 from tools.ticket_creationtion_tools import create_ticket_tool
+from tools.executor_tools import create_executor_tools
+from tools.prompt_builder import build_executor_prompt
+import tools.config as config 
 
 load_dotenv()
 
@@ -71,10 +75,22 @@ def run_bot():
     
     history = []
     
-    # Initialize agents
+    # Initialize specialized agents
     identify_agent = IdentifyKnownProblemAgent(llm_model)
     update_agent = UpdateTicketAgent(llm_model)
-    executor_agent = TicketExecutorAgent(llm_model, KNOWN_QUESTIONS)
+    cosmic_agent = AnswerCosmicQuestionsAgent(llm_model)
+    
+    # Create executor tools
+    executor_tools = create_executor_tools(identify_agent, update_agent, cosmic_agent, KNOWN_QUESTIONS)
+    
+    # Create executor agent directly (no wrapper)
+    executor_agent = ToolCallingAgent(
+        tools=executor_tools,
+        model=llm_model,
+        verbosity_level=1  # Enable verbose output
+    )
+    executor_agent.verbose = 1
+    
     create_ticket = create_ticket_tool()
     
     print("Hospital Support Assistant - Ready to help!")
@@ -97,101 +113,164 @@ def run_bot():
             # MODE 1: NORMAL CHAT (ticket_mode = false)
             # ========================================
             if not ticket_mode:
-                # Check if user mentions a problem - use identify agent
-                print("\n[Main] Normal chat mode - Checking if user mentioned a problem...")
+                # Use executor agent to handle normal chat - it will call answer_cosmic_questions first
+                print("\n[Main] Normal chat mode - Processing with executor agent...")
+                
+                state_dict = {
+                    "ticket_state": {},
+                    "questions": [],
+                    "answered": [],
+                    "conversation_history": history
+                }
+                
+                # Build prompt and run executor directly
+                prompt = build_executor_prompt(state_dict, user_msg, ticket_mode=False)
+                
                 start_time = time.time()
-                identify_result = identify_agent.identify(user_msg, KNOWN_QUESTIONS)
+                response = executor_agent.run(prompt)
                 elapsed_time = time.time() - start_time
                 
-                selected_category = identify_result.get("selected_category")
+                assistant_reply = str(response)
+                print(f"\n{assistant_reply} [{elapsed_time:.2f}s]\n")
+                history.append({"role": "assistant", "content": assistant_reply})
                 
-                if selected_category:
-                    # Find the matching issue from known_questions.json
-                    issue = None
-                    for item in KNOWN_QUESTIONS:
-                        if item.get("issue_category") == selected_category:
-                            issue = item
-                            break
+                # Check if user EXPLICITLY wants to create a ticket after the cosmic answer
+                # Only proceed if user explicitly requests ticket creation
+                user_lower = user_msg.lower().strip()
+                explicit_ticket_intent = (
+                    "create ticket" in user_lower or 
+                    "file a ticket" in user_lower or
+                    "file ticket" in user_lower or
+                    "need to create a ticket" in user_lower or
+                    "want to create a ticket" in user_lower or
+                    "let's create a ticket" in user_lower or
+                    "please create a ticket" in user_lower or
+                    "i want to report" in user_lower or
+                    "i need to report" in user_lower or
+                    "start a ticket" in user_lower or
+                    "open a ticket" in user_lower or
+                    "submit a ticket" in user_lower
+                )
+                
+                # Try to extract selected_category from executor's response
+                # The executor may have already called identify_known_problem and the result might be in the response
+                selected_category = None
+                try:
+                    # Look for JSON result from identify_known_problem in the response
+                    # The tool returns json.dumps(result) which includes "selected_category"
+                    if "selected_category" in assistant_reply:
+                        import re
+                        # Try to find JSON with selected_category
+                        json_match = re.search(r'\{"selected_category"[^}]+\}', assistant_reply)
+                        if json_match:
+                            identify_json = json.loads(json_match.group())
+                            selected_category = identify_json.get("selected_category")
+                            if selected_category:
+                                print(f"\n[Main] Extracted category from executor response: {selected_category}")
+                except Exception as e:
+                    # If parsing fails, we'll identify manually below
+                    pass
+                
+                # ONLY proceed to ticket creation if user explicitly requested it
+                # ONLY proceed to ticket creation if user explicitly requested it
+                # Do NOT proceed just because a problem was mentioned - wait for explicit ticket intent
+                if explicit_ticket_intent:
+                    # Find the original problem description from conversation history
+                    # Look backwards through history to find the most recent user message with actual problem description
+                    original_problem = user_msg
+                    ticket_keywords = ["create ticket", "file ticket", "report", "submit ticket", "open ticket", "start ticket"]
                     
-                    if issue:
-                        # Switch to ticket mode
-                        print(f"\n[Main] Problem identified: {selected_category}")
-                        print(f"[Main] Switching to ticket mode...")
-                        questions = issue["questions_to_ask"]
-                        answered = [False] * len(questions)
-                        print(f"[Main] Total questions to ask: {len(questions)}")
+                    # Search backwards through conversation history for the original problem
+                    for msg in reversed(history):
+                        if msg.get("role") == "user":
+                            msg_content = msg.get("content", "").lower()
+                            # Skip if this message is also a ticket creation request
+                            is_ticket_request = any(keyword in msg_content for keyword in ticket_keywords)
+                            if not is_ticket_request and len(msg.get("content", "")) > 20:
+                                original_problem = msg.get("content", "")
+                                print(f"[Main] Using problem description from conversation history: {original_problem[:100]}...")
+                                break
+                    
+                    # If we don't have a category yet, identify it now using the original problem description
+                    if not selected_category:
+                        print("\n[Main] User explicitly requested ticket creation - Identifying problem category...")
+                        identify_result = identify_agent.identify(original_problem, KNOWN_QUESTIONS)
+                        selected_category = identify_result.get("selected_category")
+                    
+                    # Only proceed if we have a category
+                    if selected_category:
+                        # Find the matching issue from known_questions.json
+                        issue = None
+                        for item in KNOWN_QUESTIONS:
+                            if item.get("issue_category") == selected_category:
+                                issue = item
+                                break
                         
-                        # Fill in ticket base fields
-                        ticket_state["assigned_queue"] = issue["queue"]
-                        ticket_state["category"] = issue["issue_category"]
-                        ticket_state["priority"] = issue["urgency_level"]
-                        ticket_state["description"] = user_msg
-                        ticket_state["conversation_topic"] = user_msg
-                        
-                        ticket_mode = True
-                        
-                        # Check if initial message already contains answers
-                        unanswered_indices = [i for i in range(len(questions)) if not answered[i]]
-                        if unanswered_indices:
-                            initial_update = update_agent.update(
-                                user_msg,
-                                ticket_state,
-                                questions,
-                                unanswered_indices
-                            )
+                        if issue:
+                            # Switch to ticket mode
+                            print(f"\n[Main] Problem identified: {selected_category}")
+                            print(f"[Main] Switching to ticket mode...")
+                            questions = issue["questions_to_ask"]
+                            answered = [False] * len(questions)
+                            print(f"[Main] Total questions to ask: {len(questions)}")
                             
-                            # Mark answered questions
-                            initial_answered_indices = initial_update.get("answered_question_indices", [])
-                            if isinstance(initial_answered_indices, list):
-                                for idx in initial_answered_indices:
-                                    if isinstance(idx, int) and 0 <= idx < len(questions):
-                                        answered[idx] = True
+                            # Fill in ticket base fields
+                            ticket_state["assigned_queue"] = issue["queue"]
+                            ticket_state["category"] = issue["issue_category"]
+                            ticket_state["priority"] = issue["urgency_level"]
+                            ticket_state["description"] = original_problem
+                            ticket_state["conversation_topic"] = original_problem
                             
-                            # Update state
-                            initial_updates = initial_update.get("state_updates", {})
-                            for k, v in initial_updates.items():
-                                if isinstance(v, str):
-                                    if v.strip():
+                            ticket_mode = True
+                            
+                            # Check if initial message already contains answers
+                            unanswered_indices = [i for i in range(len(questions)) if not answered[i]]
+                            if unanswered_indices:
+                                initial_update = update_agent.update(
+                                    original_problem,
+                                    ticket_state,
+                                    questions,
+                                    unanswered_indices
+                                )
+                                
+                                # Mark answered questions
+                                initial_answered_indices = initial_update.get("answered_question_indices", [])
+                                if isinstance(initial_answered_indices, list):
+                                    for idx in initial_answered_indices:
+                                        if isinstance(idx, int) and 0 <= idx < len(questions):
+                                            answered[idx] = True
+                                
+                                # Update state
+                                initial_updates = initial_update.get("state_updates", {})
+                                for k, v in initial_updates.items():
+                                    if isinstance(v, str):
+                                        if v.strip():
+                                            ticket_state[k] = v
+                                    elif v:
                                         ticket_state[k] = v
-                                elif v:
-                                    ticket_state[k] = v
-                        
-                        # Ask remaining questions
-                        unanswered_indices = [i for i in range(len(questions)) if not answered[i]]
-                        if unanswered_indices:
-                            ask_update = update_agent.update(
-                                "Please ask all the required questions. Present them as a numbered list using the original question indices.",
-                                ticket_state,
-                                questions,
-                                unanswered_indices
-                            )
-                            assistant_reply = ask_update.get("assistant_reply", "I'll help you create a support ticket.")
-                        else:
-                            assistant_reply = "I understand you're experiencing an issue. I'll help you create a support ticket."
-                        
-                        print(f"{assistant_reply} [{elapsed_time:.2f}s]\n")
-                        history.append({"role": "assistant", "content": assistant_reply})
-                        continue
+                            
+                            # Ask remaining questions
+                            unanswered_indices = [i for i in range(len(questions)) if not answered[i]]
+                            if unanswered_indices:
+                                ask_update = update_agent.update(
+                                    "Please ask all the required questions. Present them as a numbered list using the original question indices.",
+                                    ticket_state,
+                                    questions,
+                                    unanswered_indices
+                                )
+                                assistant_reply = ask_update.get("assistant_reply", "I'll help you create a support ticket.")
+                            else:
+                                assistant_reply = "I understand you're experiencing an issue. I'll help you create a support ticket."
+                            
+                            print(f"{assistant_reply} [{elapsed_time:.2f}s]\n")
+                            history.append({"role": "assistant", "content": assistant_reply})
+                            continue
                     else:
                         print(f"I couldn't find the selected category. Could you describe the problem again? [{elapsed_time:.2f}s]\n")
                         continue
                 else:
-                    # No problem identified - normal conversation
-                    # Use executor for general conversation
-                    print("\n[Main] No problem identified - Using executor for general conversation")
-                    state_dict = {
-                        "ticket_state": ticket_state,
-                        "questions": questions,
-                        "answered": answered,
-                        "conversation_history": history
-                    }
-                    start_time = time.time()
-                    result = executor_agent.process(user_msg, state_dict, ticket_mode=False)
-                    elapsed_time = time.time() - start_time
-                    
-                    assistant_reply = result.get("assistant_reply", "I'm here to help. How can I assist you?")
-                    print(f"\n{assistant_reply} [{elapsed_time:.2f}s]\n")
-                    history.append({"role": "assistant", "content": assistant_reply})
+                    # No problem identified - response already provided above
+                    # Just continue to next user input
                     continue
             
             # ========================================

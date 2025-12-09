@@ -23,6 +23,7 @@ class AgentState(TypedDict):
     conversation_history: List[BaseMessage]
     last_cosmic_query: Optional[str]
     last_cosmic_query_response: Optional[str]
+    bot_response: Optional[str]
 
 
 def detect_intent(state: AgentState) -> AgentState:
@@ -75,8 +76,6 @@ Return ONLY the JSON, nothing else."""
 
 def cosmic_search_agent(state: AgentState) -> AgentState:
     """Cosmic search agent that handles cosmic_search mode"""
-    print("i am doing a search")
-    
     # Extract the cosmic query from user input
     user_input = state.get("user_input", "")
     last_cosmic_query = user_input
@@ -85,10 +84,14 @@ def cosmic_search_agent(state: AgentState) -> AgentState:
     # For now, return a placeholder response
     last_cosmic_query_response = "RAG response placeholder - to be implemented"
     
+    # Set bot response to show to user
+    bot_response = last_cosmic_query_response
+    
     # Return the full modified state
     updated_state = dict(state)
     updated_state["last_cosmic_query"] = last_cosmic_query
     updated_state["last_cosmic_query_response"] = last_cosmic_query_response
+    updated_state["bot_response"] = bot_response
     
     return updated_state
 
@@ -131,7 +134,8 @@ def main():
     global_state = {
         "conversation_history": [],
         "last_cosmic_query": None,
-        "last_cosmic_query_response": None
+        "last_cosmic_query_response": None,
+        "bot_response": None
     }
     
     while True:
@@ -153,7 +157,8 @@ def main():
                 "user_input": user_input,
                 "conversation_history": global_state.get("conversation_history", []),
                 "last_cosmic_query": global_state.get("last_cosmic_query"),
-                "last_cosmic_query_response": global_state.get("last_cosmic_query_response")
+                "last_cosmic_query_response": global_state.get("last_cosmic_query_response"),
+                "bot_response": None
             }
             
             # Run the graph
@@ -163,15 +168,21 @@ def main():
             global_state.update({
                 "conversation_history": result.get("conversation_history", []),
                 "last_cosmic_query": result.get("last_cosmic_query"),
-                "last_cosmic_query_response": result.get("last_cosmic_query_response")
+                "last_cosmic_query_response": result.get("last_cosmic_query_response"),
+                "bot_response": result.get("bot_response")
             })
             
             # Calculate response time
             response_time = time.time() - start_time
             
-            # Display result
-            intent = result["intent"]
-            print(f"Bot: {json.dumps(intent)} ({response_time:.3f}s)\n")
+            # Display bot response (from cosmic_search_agent or default)
+            bot_response = result.get("bot_response")
+            if bot_response:
+                print(f"Bot: {bot_response} ({response_time:.3f}s)\n")
+            else:
+                # Fallback if no agent set a response (e.g., ticket_creation mode)
+                intent = result.get("intent", {})
+                print(f"Bot: {json.dumps(intent)} ({response_time:.3f}s)\n")
             
         except KeyboardInterrupt:
             print("\nGoodbye!")

@@ -182,7 +182,8 @@ def run_bot():
                 "create a ticket", "file a ticket", "open a ticket", "report this issue",
                 "create ticket", "file ticket", "open ticket", "report issue",
                 "i need to report", "i want to create a ticket", "create a support ticket",
-                "file a support request", "report this problem", "create ticket for"
+                "file a support request", "report this problem", "create ticket for",
+                "skapa en biljett", "skapa biljett", "rapportera detta problem"  # Swedish versions
             ]
             is_explicit_ticket_request = any(keyword in user_lower for keyword in explicit_ticket_keywords)
             
@@ -242,6 +243,8 @@ def run_bot():
                     last_cosmic_query=state.get("last_cosmic_query", "")
                 )
             
+            # Only proceed to ticket creation if explicit ticket keywords are present OR LLM confirms after cosmic search
+            # For cosmic search mode: if explicit keywords were used initially, proceed. If cosmic search was done, trust LLM decision.
             if resp.get("switch_to_ticket_mode"):
                 # Use last_cosmic_query if available, otherwise use current message
                 problem_description = state.get("last_cosmic_query", user_msg)
@@ -357,13 +360,25 @@ def run_bot():
         # MODE 1: NORMAL CHAT (ticket_mode = false, cosmic_search_mode = false)
         # ========================================
         if not ticket_mode and not cosmic_search_mode:
+            # Quick check for explicit ticket creation language
+            # Only proceed to ticket creation if user uses explicit ticket keywords
+            user_lower = user_msg.lower().strip()
+            explicit_ticket_keywords = [
+                "create a ticket", "file a ticket", "open a ticket", "report this issue",
+                "create ticket", "file ticket", "open ticket", "report issue",
+                "i need to report", "i want to create a ticket", "create a support ticket",
+                "file a support request", "report this problem", "create ticket for",
+                "skapa en biljett", "skapa biljett", "rapportera detta problem"  # Swedish versions
+            ]
+            is_explicit_ticket_request = any(keyword in user_lower for keyword in explicit_ticket_keywords)
+            
             response_time = resp.get("_response_time", 0)
             assistant_reply = resp["assistant_reply"]
             print(f"{assistant_reply} [{response_time:.2f}s]\n")
             history.append({"role": "assistant", "content": assistant_reply})
 
-            # Switch to ticket mode?
-            if resp.get("switch_to_ticket_mode"):
+            # Switch to ticket mode? Only if explicit ticket request keywords are present
+            if resp.get("switch_to_ticket_mode") and is_explicit_ticket_request:
                 # Use last_cosmic_query if available, otherwise use current message
                 problem_description = state.get("last_cosmic_query", user_msg)
                 

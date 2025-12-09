@@ -642,5 +642,111 @@
         "Is there backup equipment available while repairs are being made?"
       ],
       "text": "Housekeeping and environmental services issue protocol for Servicedesk. Covers vacuum cleaners, floor cleaning machines, waste management systems, and sanitation equipment supporting infection control and hospital cleanliness. Essential questions: specific equipment malfunction, impact on patient area sanitation, infection control concerns, number of affected areas or floors, and backup equipment availability."
-    }
+    },
+    {
+  "source_file": "AmbulansintegrationV3.json",
+  "section": "Ambulanskontakter",
+  "page": 1,
+  "section_id": "A9",
+  "main_section_id": "A",
+  "context_summary": "Covers issues where destination does not appear for incoming ambulance patients, requiring filtering adjustments.",
+  "keywords": [
+    "destination saknas",
+    "ambulanskontakt",
+    "akutmodul",
+    "Cosmic"
+  ],
+  "content_type": "support_protocol",
+  "hierarchical_tags": [
+    "Integration",
+    "Akutmodul"
+  ],
+  "clinical_domain": [
+    "Akutsjukvård"
+  ],
+  "queue": "Servicedesk",
+  "issue_category": "Destination visas inte",
+  "urgency_level": "low",
+  "description": "Destination may not appear if it is missing in Paratus or misconfigured, requiring ED staff to filter by 'alla' to see the patient.",
+  "questions_to_ask": [
+    "Vilken destination valdes i Paratus?",
+    "Visas patienten endast om man filtrerar på 'alla'?",
+    "Har destinationen ett giltigt HSAID?",
+    "Har detta påverkat triagering eller patientflöde?",
+    "Har felet inträffat tidigare för samma destination?"
+  ],
+  "text": "Destination kan saknas i ambulansvyn om den inte är korrekt angiven eller speglad. Akuten måste då filtrera på 'alla' för att se patienten."
+},
+{
+  "source_file": "AmbulansintegrationV3.json",
+  "section": "Akutmodul",
+  "page": 1,
+  "section_id": "A8",
+  "main_section_id": "A",
+  "context_summary": "Covers cases where the ED cannot start an emergency contact because the patient already has an active admission.",
+  "keywords": [
+    "akutkontakt",
+    "patient inskriven",
+    "Cosmic",
+    "felmeddelande"
+  ],
+  "content_type": "support_protocol",
+  "hierarchical_tags": [
+    "Akutmodul",
+    "Patientflöde"
+  ],
+  "clinical_domain": [
+    "Akutsjukvård",
+    "Patientadministration"
+  ],
+  "queue": "Servicedesk",
+  "issue_category": "Akutkontakt kan inte startas",
+  "urgency_level": "medium",
+  "description": "Occurs when a patient appearing in the ambulance contact list is already admitted in another unit, preventing the ED from starting an emergency contact.",
+  "questions_to_ask": [
+    "Var är patienten redan inskriven enligt Cosmic?",
+    "Försökte ni starta akutenkontakt från fliken Ambulanskontakter?",
+    "Visades något specifikt felmeddelande?",
+    "Har patienten dubbla vårdtillfällen registrerade?",
+    "Behöver akuten starta kontakten manuellt enligt rutin?"
+  ],
+  "text": "När patienten redan är inskriven på en annan enhet går det inte att starta akutkontakt från ambulansfliken. Akuten behöver då starta kontakten enligt ordinarie rutin."
+},
+{
+  "source_file": "AmbulansintegrationV3.json",
+  "section": "HSAID och stationskoppling",
+  "page": 1,
+  "section_id": "A7",
+  "main_section_id": "A",
+  "context_summary": "Covers cases where ambulances appear as belonging to the wrong station because some stations lack HSAID entries.",
+  "keywords": [
+    "HSAID",
+    "ambulanstation",
+    "stationsfel",
+    "Paratus",
+    "Cosmic"
+  ],
+  "content_type": "support_protocol",
+  "hierarchical_tags": [
+    "Configuration",
+    "Ambulans"
+  ],
+  "clinical_domain": [
+    "Akutsjukvård"
+  ],
+  "queue": "Servicedesk",
+  "issue_category": "Ambulans visas under fel station",
+  "urgency_level": "low",
+  "description": "Stations such as Nordmaling, Vännäs and Robertsfors lack HSAID entries, causing their vehicles to appear as belonging to Umeå or Skellefteå instead.",
+  "questions_to_ask": [
+    "Vilken bil och station gäller ärendet?",
+    "Visas bilen under en annan station i Cosmic?",
+    "Har stationen ett giltigt HSAID i VSS?",
+    "Har problemet uppstått för samma bil tidigare?",
+    "Behöver mottagande enhet fatta beslut beroende på stationstillhörighet?"
+  ],
+  "text": "Vissa stationer saknar HSAID vilket leder till att fordon visas under fel ambulansstation i Cosmic. Kräver korrigering i VSS."
+}
+
+
   ]

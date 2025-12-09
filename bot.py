@@ -6,6 +6,7 @@ from langgraph.graph import StateGraph, END
 from langchain_core.messages import HumanMessage, SystemMessage, AIMessage, BaseMessage
 import os
 from dotenv import load_dotenv
+from utils import parse_json_from_response
 
 load_dotenv()
 
@@ -60,24 +61,8 @@ Return ONLY the JSON, nothing else."""
     response = llm.invoke(messages)
     response_text = response.content.strip()
     
-    # Try to parse JSON from response
-    try:
-        # Remove markdown code blocks if present
-        if "```" in response_text:
-            response_text = response_text.split("```")[1]
-            if response_text.startswith("json"):
-                response_text = response_text[4:]
-        response_text = response_text.strip()
-        intent = json.loads(response_text)
-    except json.JSONDecodeError:
-        # Fallback: try to extract JSON from response
-        import re
-        json_match = re.search(r'\{[^}]+\}', response_text)
-        if json_match:
-            intent = json.loads(json_match.group())
-        else:
-            # Default fallback
-            intent = {"mode": "cosmic_search"}
+    # Parse JSON from response using utility function
+    intent = parse_json_from_response(response_text)
     
     # Update conversation history with new messages
     updated_history = conversation_history + [

@@ -8,7 +8,11 @@ from pathlib import Path
 from uuid import uuid4
 
 # Add parent directory to path to import root config BEFORE other imports
-sys.path.insert(0, str(Path(__file__).parent.parent))
+parent_dir = Path(__file__).parent.parent
+sys.path.insert(0, str(parent_dir))
+# Also add tools directory to path for importing ask_qdrant and rag
+tools_dir = Path(__file__).parent
+sys.path.insert(0, str(tools_dir))
 
 from qdrant_client import AsyncQdrantClient
 from qdrant_client.http import models as rest
@@ -136,7 +140,8 @@ async def ingest_chunks_into_qdrant(
         json_path: Optional[str] = None,
         collection_name: Optional[str] = None,
         batch_size: int = 32,
-        recreate_collection: bool = False
+        recreate_collection: bool = False,
+        progress_callback=None
 ) -> dict:
     """Load chunked manual JSON file and upsert embeddings into Qdrant."""
     print(f"CHUNKS_PATH: {json_path}")
@@ -281,6 +286,7 @@ async def ingest_chunks_into_qdrant(
                 payload=_build_payload(chunk)
             )
 
+        total_chunks = len(chunks)
         for index, chunk in enumerate(chunks):
             chunk["text_id"] = str(uuid4())
             text_content = (chunk.get("text") or "").strip()
@@ -291,6 +297,8 @@ async def ingest_chunks_into_qdrant(
                     "chunk_id": chunk.get("text_id"),
                     "source_file": chunk.get("source_file") or chunk_sources[index]
                 })
+                if progress_callback:
+                    progress_callback(index + 1, total_chunks, stored_count, len(failed_chunks))
                 continue
 
             if index == first_chunk_index:
@@ -305,6 +313,8 @@ async def ingest_chunks_into_qdrant(
                     "chunk_id": chunk.get("text_id"),
                     "source_file": chunk.get("source_file") or chunk_sources[index]
                 })
+                if progress_callback:
+                    progress_callback(index + 1, total_chunks, stored_count, len(failed_chunks))
                 continue
 
             points_batch.append(_build_point(chunk, embedding))
@@ -316,6 +326,9 @@ async def ingest_chunks_into_qdrant(
                 )
                 stored_count += len(points_batch)
                 points_batch = []
+                
+            if progress_callback:
+                progress_callback(index + 1, total_chunks, stored_count, len(failed_chunks))
 
         if points_batch:
             await qdrant_client.upsert(
@@ -323,6 +336,8 @@ async def ingest_chunks_into_qdrant(
                 points=points_batch
             )
             stored_count += len(points_batch)
+            if progress_callback:
+                progress_callback(total_chunks, total_chunks, stored_count, len(failed_chunks))
 
         return {
             "success": True,

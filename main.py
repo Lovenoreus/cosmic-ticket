@@ -6,9 +6,12 @@ Requires: pip install smolagents openai
 import os
 from smolagents import ToolCallingAgent
 from smolagents.models import OpenAIServerModel
+from smolagents import tool
 from dotenv import load_dotenv
-from tools import create_math_agent_tool, create_medical_agent_tool
-
+# from tools import create_math_agent_tool, create_medical_agent_tool
+# from agents.math_agent import MathAgent
+# from agents.medical_agent import MedicalAgent
+import time
 load_dotenv()
 
 
@@ -18,30 +21,7 @@ llm_model = OpenAIServerModel(
     api_key=os.environ.get("OPENAI_API_KEY")
 )
 
-
-# ===== SPECIALIZED AGENT NODES =====
-
-class MathAgent:
-    """Agent specialized in solving mathematical problems"""
-    
-    def __init__(self, model):
-        self.agent = ToolCallingAgent(
-            tools=[],
-            model=model, 
-            verbosity_level=0
-        )
-        self.agent.verbose = 0
-    
-    def solve(self, problem: str) -> str:
-        """Solve a mathematical problem"""
-        prompt = f"""You are a mathematical expert. Solve this math problem step by step.
-Show your work clearly and provide the final answer.
-
-Problem: {problem}"""
-        response = self.agent.run(prompt)
-        return str(response)
-
-
+# ===== AGENTS =====
 class MedicalAgent:
     """Agent specialized in medical information"""
     
@@ -63,8 +43,73 @@ Query: {query}"""
         return str(response)
 
 
-# ===== EXECUTOR NODE =====
+def create_medical_agent_tool(medical_agent):
+    """
+    Create a tool that calls the medical agent to answer medical queries.
+    
+    Args:
+        medical_agent: An instance of MedicalAgent
+        
+    Returns:
+        A tool decorated function that can be used by the executor agent
+    """
+    @tool
+    def call_medical_agent(query: str) -> str:
+        """
+        Call this tool when the user asks about medical information, health conditions,
+        symptoms, treatments, or any medical-related query.
+        
+        Args:
+            query: The medical information query
+        """
+        return medical_agent.answer(query)
+    
+    return call_medical_agent
 
+class MathAgent:
+    def __init__(self, model):
+        self.model = model
+
+    def solve(self, problem: str) -> str:
+        prompt = f"""You are a mathematical expert. Give a short explanation and final answer.
+
+Problem: {problem}"""
+        
+        # OpenAIServerModel expects messages in the correct format
+        messages = [{"role": "user", "content": prompt}]
+        response = self.model(messages)
+        
+        # Extract the text from the response
+        return response
+
+
+def create_math_agent_tool(math_agent):
+    """
+    Create a tool that calls the math agent to solve mathematical problems.
+    
+    Args:
+        math_agent: An instance of MathAgent
+        
+    Returns:
+        A tool decorated function that can be used by the executor agent
+    """
+    @tool
+    def call_math_agent(problem: str) -> str:
+        """
+        Call this tool when the user asks to solve a mathematical problem, 
+        calculation, equation, or any math-related query.
+        
+        Args:
+            problem: The mathematical problem to solve
+        """
+        return math_agent.solve(problem)
+    
+    return call_math_agent
+
+
+
+
+# ===== EXECUTOR NODE =====
 class ExecutorNode:
     """Main executor that identifies user intent and routes to appropriate agents"""
     
@@ -85,18 +130,19 @@ class ExecutorNode:
         self.executor.verbose = 0
     
     def process(self, user_input: str) -> str:
-        """Process user input and route to appropriate handler"""
+        """Process user input and route to appropriate handler (agent or tool)"""
+
         prompt = f"""You are an intelligent assistant executor that routes user queries 
-to specialized agents.
+to specialized agents and tools.
 
-- For MATH problems (calculations, equations, word problems): Use call_math_agent
-- For MEDICAL queries (health info, conditions, symptoms): Use call_medical_agent
-- For SMALL TALK or general conversation: Respond directly in a friendly manner
+- For MEDICAL queries: use call_medical_agent
+- For MATH queries: use call_math_agent
+- For SMALL TALK or general conversation: respond directly
 
-Identify the user's intent and either handle it yourself (for small talk) or 
-route to the appropriate specialized agent.
+Identify the user's intent and route accordingly.
 
-User: {user_input}"""
+User: {user_input}
+"""
         response = self.executor.run(prompt)
         return str(response)
 
@@ -105,17 +151,6 @@ User: {user_input}"""
 
 def main():
     """Run the agentic AI application"""
-    
-    print("=" * 60)
-    print("Smolagents Agentic AI Application")
-    print("=" * 60)
-    print("I can help you with:")
-    print("  • Mathematical problems")
-    print("  • Medical information")
-    print("  • General conversation")
-    print("\nType 'quit' or 'exit' to end the conversation.")
-    print("=" * 60)
-    
     # Initialize the executor node
     executor = ExecutorNode(llm_model)
     
@@ -123,6 +158,7 @@ def main():
     while True:
         try:
             user_input = input("\nYou: ").strip()
+            start_time=time.time()
             
             if not user_input:
                 continue
@@ -133,7 +169,8 @@ def main():
             
             # Process the user input through executor
             response = executor.process(user_input)
-            print(f"\nAssistant: {response}")
+            elapsed_time = time.time() - start_time
+            print(f"\nAssistant: {response}({elapsed_time})")
             
         except KeyboardInterrupt:
             print("\n\nAssistant: Goodbye!")

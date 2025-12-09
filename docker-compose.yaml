@@ -8,8 +8,6 @@ services:
     volumes:
       - qdrant_storage_cosmic_and_ticket:/qdrant/storage
     restart: unless-stopped
-    networks:
-      - mcp-network
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:6333/ready"]
       interval: 30s

@@ -6,12 +6,17 @@ import asyncio
 from typing import List, Optional, Tuple, Dict, Any
 from pathlib import Path
 from uuid import uuid4
+
+# Add parent directory to path to import root config BEFORE other imports
+sys.path.insert(0, str(Path(__file__).parent.parent))
+
 from qdrant_client import AsyncQdrantClient
 from qdrant_client.http import models as rest
 from langchain_openai import OpenAIEmbeddings
 import traceback
 from dotenv import load_dotenv, find_dotenv
 from openai import OpenAI
+
 from ask_qdrant import ask_question, HybridResult
 from rag import generate_answer
 import httpx

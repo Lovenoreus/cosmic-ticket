@@ -4,7 +4,11 @@
 import sys
 import time
 import os
+from pathlib import Path
 from typing import Dict, Any, Optional
+
+# Add parent directory to path to import root config
+sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from dotenv import load_dotenv
 from openai import OpenAI

@@ -200,24 +200,30 @@ def run_bot():
                     # Save the last cosmic query
                     state["last_cosmic_query"] = user_msg
                     
-                    # Now check if user wants to create a ticket AFTER seeing results
-                    resp = call_llm(
-                        user_msg, 
-                        ticket_mode=False, 
-                        cosmic_search_mode=True, 
-                        state=state, 
-                        questions=[], 
-                        answered=[], 
-                        history=history,
-                        last_cosmic_query=state.get("last_cosmic_query", "")
-                    )
-                    
-                    # If user wants to create a ticket after seeing results, proceed to ticket creation
-                    if resp.get("switch_to_ticket_mode"):
-                        # Fall through to ticket creation logic below
-                        pass
+                    # After showing cosmic search results, stay in cosmic search mode
+                    # Only proceed to ticket creation if user explicitly requests it with keywords
+                    # Check again for explicit ticket keywords in case user wants to create ticket now
+                    if any(keyword in user_lower for keyword in explicit_ticket_keywords):
+                        # User explicitly requested ticket creation after cosmic search
+                        # Check with LLM to confirm
+                        resp = call_llm(
+                            user_msg, 
+                            ticket_mode=False, 
+                            cosmic_search_mode=True, 
+                            state=state, 
+                            questions=[], 
+                            answered=[], 
+                            history=history,
+                            last_cosmic_query=state.get("last_cosmic_query", "")
+                        )
+                        if resp.get("switch_to_ticket_mode"):
+                            # Fall through to ticket creation logic below - is_explicit_ticket_request is True
+                            is_explicit_ticket_request = True
+                        else:
+                            # Even with keywords, LLM says no - continue in cosmic search mode
+                            continue
                     else:
-                        # User doesn't want to create a ticket, continue in cosmic search mode
+                        # No explicit ticket keywords - just continue in cosmic search mode
                         continue
                         
                 except Exception as e:
@@ -225,27 +231,27 @@ def run_bot():
                     history.append({"role": "assistant", "content": f"Error performing cosmic search: {str(e)}"})
                     continue
             
-            # Explicit ticket request OR ticket intent detected after cosmic search
-            # Check ticket creation intent using LLM (for explicit requests, this confirms it)
+            # Only reach here if is_explicit_ticket_request is True (initial explicit request)
+            # Double-check: must have explicit keywords to proceed
             if not is_explicit_ticket_request:
-                # We already have resp from above, use it
-                pass
-            else:
-                # For explicit requests, still check with LLM but it should confirm
-                resp = call_llm(
-                    user_msg, 
-                    ticket_mode=False, 
-                    cosmic_search_mode=True, 
-                    state=state, 
-                    questions=[], 
-                    answered=[], 
-                    history=history,
-                    last_cosmic_query=state.get("last_cosmic_query", "")
-                )
+                # This should not happen - if no explicit keywords, we should have continued above
+                # Safety check: continue in cosmic search mode
+                continue
             
-            # Only proceed to ticket creation if explicit ticket keywords are present OR LLM confirms after cosmic search
-            # For cosmic search mode: if explicit keywords were used initially, proceed. If cosmic search was done, trust LLM decision.
-            if resp.get("switch_to_ticket_mode"):
+            # Check ticket creation intent using LLM to confirm explicit request
+            resp = call_llm(
+                user_msg, 
+                ticket_mode=False, 
+                cosmic_search_mode=True, 
+                state=state, 
+                questions=[], 
+                answered=[], 
+                history=history,
+                last_cosmic_query=state.get("last_cosmic_query", "")
+            )
+            
+            # Only proceed if we have explicit ticket keywords AND LLM confirms
+            if is_explicit_ticket_request and resp.get("switch_to_ticket_mode"):
                 # Use last_cosmic_query if available, otherwise use current message
                 problem_description = state.get("last_cosmic_query", user_msg)
                 
@@ -330,28 +336,58 @@ def run_bot():
                     continue
                 # If all questions are already answered (shouldn't happen, but handle it)
                 continue
-            
-            # User doesn't want to create a ticket, proceed with cosmic search
-            print("\n[Searching Cosmic database...]")
-            try:
-                cosmic_result = asyncio.run(cosmic_database_tool2(user_msg))
-                formatted_response = format_cosmic_results(cosmic_result)
-                print(f"\n{formatted_response}\n")
-                history.append({"role": "assistant", "content": formatted_response})
-                
-                # Save the last cosmic query
-                state["last_cosmic_query"] = user_msg
-                continue
-                    
-            except Exception as e:
-                print(f"\nError performing cosmic search: {str(e)}\n")
-                history.append({"role": "assistant", "content": f"Error performing cosmic search: {str(e)}"})
-                continue
 
         # -----------------------------------------
         # CALL LLM in the appropriate mode (for ticket_mode or normal chat)
+        # NOTE: This section is only reached if NOT in cosmic_search_mode
         # -----------------------------------------
-        resp = call_llm(user_msg, ticket_mode, cosmic_search_mode, state, questions, answered, history, last_cosmic_query=state.get("last_cosmic_query", ""))
+        # Safety check: if we're in cosmic_search_mode, we should have already handled it above
+        if cosmic_search_mode:
+            # This should not happen - cosmic_search_mode should be handled in the block above
+            # But if we somehow reach here, just continue
+            continue
+        
+        # For normal chat mode: check for explicit ticket keywords BEFORE calling LLM
+        # This prevents LLM from incorrectly detecting ticket intent
+        user_lower = user_msg.lower().strip()
+        explicit_ticket_keywords = [
+            "create a ticket", "file a ticket", "open a ticket", "report this issue",
+            "create ticket", "file ticket", "open ticket", "report issue",
+            "i need to report", "i want to create a ticket", "create a support ticket",
+            "file a support request", "report this problem", "create ticket for",
+            "skapa en biljett", "skapa biljett", "rapportera detta problem"  # Swedish versions
+        ]
+        is_explicit_ticket_request = any(keyword in user_lower for keyword in explicit_ticket_keywords)
+        
+        # Only call LLM if NOT in ticket mode
+        # If explicit ticket request, skip normal LLM call and go directly to ticket creation
+        if not ticket_mode:
+            if is_explicit_ticket_request:
+                # User explicitly wants ticket - skip normal LLM call and go to ticket creation
+                # Use last_cosmic_query if available, otherwise use current message
+                problem_description = state.get("last_cosmic_query", user_msg)
+                
+                if not problem_description or not problem_description.strip():
+                    problem_description = user_msg
+                
+                # Go directly to ticket creation flow
+                resp = call_llm(
+                    f"I want to create a ticket for this issue: {problem_description}",
+                    ticket_mode=False,
+                    cosmic_search_mode=False,
+                    state=state,
+                    questions=[],
+                    answered=[],
+                    history=history,
+                    last_cosmic_query=state.get("last_cosmic_query", "")
+                )
+            else:
+                # Normal conversation - call LLM for response
+                resp = call_llm(user_msg, ticket_mode, cosmic_search_mode, state, questions, answered, history, last_cosmic_query=state.get("last_cosmic_query", ""))
+        else:
+            # Already in ticket mode - call LLM normally
+            resp = call_llm(user_msg, ticket_mode, cosmic_search_mode, state, questions, answered, history, last_cosmic_query=state.get("last_cosmic_query", ""))
+        
         if DEBUG: 
             print("\nRESP:")
             pprint(resp)
@@ -359,26 +395,18 @@ def run_bot():
         # ========================================
         # MODE 1: NORMAL CHAT (ticket_mode = false, cosmic_search_mode = false)
         # ========================================
-        if not ticket_mode and not cosmic_search_mode:
-            # Quick check for explicit ticket creation language
-            # Only proceed to ticket creation if user uses explicit ticket keywords
-            user_lower = user_msg.lower().strip()
-            explicit_ticket_keywords = [
-                "create a ticket", "file a ticket", "open a ticket", "report this issue",
-                "create ticket", "file ticket", "open ticket", "report issue",
-                "i need to report", "i want to create a ticket", "create a support ticket",
-                "file a support request", "report this problem", "create ticket for",
-                "skapa en biljett", "skapa biljett", "rapportera detta problem"  # Swedish versions
-            ]
-            is_explicit_ticket_request = any(keyword in user_lower for keyword in explicit_ticket_keywords)
+        # Safety check: must not be in cosmic_search_mode
+        if cosmic_search_mode:
+            continue
             
+        if not ticket_mode and not cosmic_search_mode:
             response_time = resp.get("_response_time", 0)
             assistant_reply = resp["assistant_reply"]
             print(f"{assistant_reply} [{response_time:.2f}s]\n")
             history.append({"role": "assistant", "content": assistant_reply})
 
             # Switch to ticket mode? Only if explicit ticket request keywords are present
-            if resp.get("switch_to_ticket_mode") and is_explicit_ticket_request:
+            if is_explicit_ticket_request:
                 # Use last_cosmic_query if available, otherwise use current message
                 problem_description = state.get("last_cosmic_query", user_msg)
                 

@@ -82,10 +82,12 @@ CRITICAL: Ticket Creation Requirements
 
 When in this mode your JSON response MUST include:
 {
-  "assistant_reply": "<Respond normally to the user's message. If they describe a problem but don't explicitly request ticket creation, just acknowledge their concern helpfully.>",
+  "assistant_reply": "<Respond normally to the user's message. If they describe a problem but don't explicitly request ticket creation, just acknowledge their concern helpfully. DO NOT mention creating tickets, filing tickets, or support tickets unless the user explicitly requests it.>",
   "switch_to_ticket_mode": false,
   "selected_category": null
 }
+
+CRITICAL: Your response should NEVER mention "create a ticket", "I will help you create a support ticket", "filing a ticket", or any ticket-related language unless the user explicitly uses ticket creation keywords. Simply describing a problem does NOT mean they want a ticket.
 
 If switch_to_ticket_mode is true, you MUST also include "selected_category" with the exact issue_category string from one of the categories in the AVAILABLE ISSUE CATEGORIES section.
 

@@ -197,6 +197,10 @@ def run_bot():
                     last_cosmic_query=state["last_cosmic_query"]
                 )
                 
+                # If user doesn't want to create a ticket, just continue in cosmic search mode
+                if not resp.get("switch_to_ticket_mode"):
+                    continue
+                
                 if resp.get("switch_to_ticket_mode"):
                     # User wants to create a ticket - use last_cosmic_query for problem identification
                     cosmic_search_mode = False
@@ -268,11 +272,16 @@ def run_bot():
                             state[k] = v
                     
                     # Immediately ask all remaining unanswered questions
-                    resp = call_llm("Please ask all the required questions.", ticket_mode, cosmic_search_mode=False, state=state, questions=questions, answered=answered, history=history, last_cosmic_query=state["last_cosmic_query"])
-                    response_time = resp.get("_response_time", 0)
-                    assistant_reply = resp["assistant_reply"]
-                    print(f"{assistant_reply} [{response_time:.2f}s]\n")
-                    history.append({"role": "assistant", "content": assistant_reply})
+                    # Only ask if there are unanswered questions
+                    if not all(answered):
+                        resp = call_llm("Please ask all the required questions.", ticket_mode, cosmic_search_mode=False, state=state, questions=questions, answered=answered, history=history, last_cosmic_query=state["last_cosmic_query"])
+                        response_time = resp.get("_response_time", 0)
+                        assistant_reply = resp["assistant_reply"]
+                        print(f"{assistant_reply} [{response_time:.2f}s]\n")
+                        history.append({"role": "assistant", "content": assistant_reply})
+                        continue
+                    # If all questions are already answered (shouldn't happen, but handle it)
+                    # Don't show ticket summary immediately - wait for user input first
                     continue
                     
             except Exception as e:
@@ -368,7 +377,12 @@ def run_bot():
         # ========================================
         # MODE 2: TICKET MODE
         # ========================================
-        else:
+        elif ticket_mode:
+            # Only process if we have questions to ask (prevent showing summary immediately after entering ticket mode)
+            if not questions or len(questions) == 0:
+                print("Setting up ticket... Please wait.\n")
+                continue
+                
             response_time = resp.get("_response_time", 0)
             assistant_reply = resp["assistant_reply"]
             print(f"{assistant_reply} [{response_time:.2f}s]\n")

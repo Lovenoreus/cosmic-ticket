@@ -22,3 +22,8 @@ OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
 # Qdrant search configuration
 QDRANT_RESULT_LIMIT = int(os.getenv("QDRANT_RESULT_LIMIT", "5"))
 
+# Chunk ingestion configuration
+INGEST_JSON_PATH = os.getenv("INGEST_JSON_PATH", 'data/cosmic_chunks')  # Path to JSON chunks file or directory, None uses default
+INGEST_BATCH_SIZE = int(os.getenv("INGEST_BATCH_SIZE", "32"))  # Number of chunks to process per batch
+INGEST_RECREATE_COLLECTION = os.getenv("INGEST_RECREATE_COLLECTION", "false").lower() == "true"  # Recreate collection (deletes existing data)
+

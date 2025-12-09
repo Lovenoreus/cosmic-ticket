@@ -130,6 +130,7 @@ def save_ticket(state, history=None):
 def format_cosmic_results(cosmic_result):
     """Format cosmic search results for display to user"""
     if cosmic_result.get("success"):
+        print("go cosmic result successfully")
         message = cosmic_result.get("message", "Search completed.")
         sources = cosmic_result.get("sources", [])
         
@@ -174,7 +175,160 @@ def run_bot():
         # MODE 0: COSMIC SEARCH MODE (cosmic_search_mode = true)
         # ========================================
         if cosmic_search_mode:
-            # Perform cosmic search
+            # Quick check for explicit ticket creation language (before cosmic search)
+            # Only skip cosmic search if user uses explicit ticket creation phrases
+            user_lower = user_msg.lower().strip()
+            explicit_ticket_keywords = [
+                "create a ticket", "file a ticket", "open a ticket", "report this issue",
+                "create ticket", "file ticket", "open ticket", "report issue",
+                "i need to report", "i want to create a ticket", "create a support ticket",
+                "file a support request", "report this problem", "create ticket for"
+            ]
+            is_explicit_ticket_request = any(keyword in user_lower for keyword in explicit_ticket_keywords)
+            
+            # If NOT an explicit ticket request, always do cosmic search first
+            if not is_explicit_ticket_request:
+                # Perform cosmic search first
+                print("\n[Searching Cosmic database...]")
+                try:
+                    cosmic_result = asyncio.run(cosmic_database_tool2(user_msg))
+                    formatted_response = format_cosmic_results(cosmic_result)
+                    print(f"\n{formatted_response}\n")
+                    history.append({"role": "assistant", "content": formatted_response})
+                    
+                    # Save the last cosmic query
+                    state["last_cosmic_query"] = user_msg
+                    
+                    # Now check if user wants to create a ticket AFTER seeing results
+                    resp = call_llm(
+                        user_msg, 
+                        ticket_mode=False, 
+                        cosmic_search_mode=True, 
+                        state=state, 
+                        questions=[], 
+                        answered=[], 
+                        history=history,
+                        last_cosmic_query=state.get("last_cosmic_query", "")
+                    )
+                    
+                    # If user wants to create a ticket after seeing results, proceed to ticket creation
+                    if resp.get("switch_to_ticket_mode"):
+                        # Fall through to ticket creation logic below
+                        pass
+                    else:
+                        # User doesn't want to create a ticket, continue in cosmic search mode
+                        continue
+                        
+                except Exception as e:
+                    print(f"\nError performing cosmic search: {str(e)}\n")
+                    history.append({"role": "assistant", "content": f"Error performing cosmic search: {str(e)}"})
+                    continue
+            
+            # Explicit ticket request OR ticket intent detected after cosmic search
+            # Check ticket creation intent using LLM (for explicit requests, this confirms it)
+            if not is_explicit_ticket_request:
+                # We already have resp from above, use it
+                pass
+            else:
+                # For explicit requests, still check with LLM but it should confirm
+                resp = call_llm(
+                    user_msg, 
+                    ticket_mode=False, 
+                    cosmic_search_mode=True, 
+                    state=state, 
+                    questions=[], 
+                    answered=[], 
+                    history=history,
+                    last_cosmic_query=state.get("last_cosmic_query", "")
+                )
+            
+            if resp.get("switch_to_ticket_mode"):
+                # Use last_cosmic_query if available, otherwise use current message
+                problem_description = state.get("last_cosmic_query", user_msg)
+                
+                if not problem_description or not problem_description.strip():
+                    # No previous cosmic query, use current message
+                    problem_description = user_msg
+                
+                # Skip cosmic search and go directly to ticket creation flow
+                cosmic_search_mode = False
+                ticket_mode = False  # Will be set to True after identifying the problem
+                
+                # Call LLM to identify the category based on problem_description
+                resp = call_llm(
+                    f"I want to create a ticket for this issue: {problem_description}",
+                    ticket_mode=False,
+                    cosmic_search_mode=False,
+                    state=state,
+                    questions=[],
+                    answered=[],
+                    history=history,
+                    last_cosmic_query=state.get("last_cosmic_query", "")
+                )
+                
+                selected_category = resp.get("selected_category")
+                if not selected_category:
+                    print("I couldn't identify a technical issue category. Could you describe the problem again?")
+                    cosmic_search_mode = True  # Return to cosmic search mode
+                    continue
+                
+                # Find the matching issue from known_questions.json
+                issue = None
+                for item in KNOWN_QUESTIONS:
+                    if item.get("issue_category") == selected_category:
+                        issue = item
+                        break
+                
+                if not issue:
+                    print("I couldn't find the selected category. Could you describe the problem again?")
+                    cosmic_search_mode = True  # Return to cosmic search mode
+                    continue
+                
+                questions = issue["questions_to_ask"]
+                answered = [False] * len(questions)
+                
+                # Fill in ticket base fields
+                state["assigned_queue"] = issue["queue"]
+                state["category"] = issue["issue_category"]
+                state["priority"] = issue["urgency_level"]
+                state["description"] = problem_description
+                state["conversation_topic"] = problem_description
+                
+                ticket_mode = True
+                
+                # Check if the problem_description already contains answers to any questions
+                initial_analysis_prompt = f"CRITICAL: Analyze the problem description that prompted ticket creation. The problem is: '{problem_description}'. Review ALL questions in the remaining_questions array and identify which ones have already been answered in this description. Look for: time references (when did it start, how long), location mentions (room, area, floor), symptoms (heating, cooling, sounds, temperature), impact statements, damage descriptions, etc. IMPORTANT: If the user explicitly states that information is unknown, unavailable, not available, or will never be known (e.g., 'unknown', 'unavailable', 'forever unknown', 'cannot be determined'), mark that question as ANSWERED with 'unknown' as the answer. Be thorough - if the user mentioned ANY information that answers a question OR explicitly stated information is unknown, mark it as answered. Return the indices (0-based) of ALL questions that are already answered in answered_question_indices, and extract any relevant information into state_updates."
+                initial_resp = call_llm(initial_analysis_prompt, ticket_mode, cosmic_search_mode=False, state=state, questions=questions, answered=answered, history=history, last_cosmic_query=state.get("last_cosmic_query", ""))
+                
+                # Mark questions that were already answered
+                initial_answered_indices = initial_resp.get("answered_question_indices", [])
+                if isinstance(initial_answered_indices, list):
+                    for idx in initial_answered_indices:
+                        if isinstance(idx, int) and 0 <= idx < len(questions):
+                            answered[idx] = True
+                
+                # Update state with any information extracted
+                initial_updates = initial_resp.get("state_updates", {})
+                for k, v in initial_updates.items():
+                    if isinstance(v, str):
+                        if v.strip():
+                            state[k] = v
+                    elif v:
+                        state[k] = v
+                
+                # Immediately ask all remaining unanswered questions
+                # Only ask if there are unanswered questions
+                if not all(answered):
+                    resp = call_llm("Please ask all the required questions.", ticket_mode, cosmic_search_mode=False, state=state, questions=questions, answered=answered, history=history, last_cosmic_query=state.get("last_cosmic_query", ""))
+                    response_time = resp.get("_response_time", 0)
+                    assistant_reply = resp["assistant_reply"]
+                    print(f"{assistant_reply} [{response_time:.2f}s]\n")
+                    history.append({"role": "assistant", "content": assistant_reply})
+                    continue
+                # If all questions are already answered (shouldn't happen, but handle it)
+                continue
+            
+            # User doesn't want to create a ticket, proceed with cosmic search
             print("\n[Searching Cosmic database...]")
             try:
                 cosmic_result = asyncio.run(cosmic_database_tool2(user_msg))
@@ -184,105 +338,7 @@ def run_bot():
                 
                 # Save the last cosmic query
                 state["last_cosmic_query"] = user_msg
-                
-                # Check if user wants to create a ticket
-                resp = call_llm(
-                    user_msg, 
-                    ticket_mode=False, 
-                    cosmic_search_mode=True, 
-                    state=state, 
-                    questions=[], 
-                    answered=[], 
-                    history=history,
-                    last_cosmic_query=state["last_cosmic_query"]
-                )
-                
-                # If user doesn't want to create a ticket, just continue in cosmic search mode
-                if not resp.get("switch_to_ticket_mode"):
-                    continue
-                
-                if resp.get("switch_to_ticket_mode"):
-                    # User wants to create a ticket - use last_cosmic_query for problem identification
-                    cosmic_search_mode = False
-                    ticket_mode = False  # Will be set to True after identifying the problem
-                    
-                    # Use last_cosmic_query to identify the known problem
-                    problem_description = state.get("last_cosmic_query", user_msg)
-                    
-                    # Call LLM to identify the category based on last_cosmic_query
-                    resp = call_llm(
-                        f"I want to create a ticket for this issue: {problem_description}",
-                        ticket_mode=False,
-                        cosmic_search_mode=False,
-                        state=state,
-                        questions=[],
-                        answered=[],
-                        history=history,
-                        last_cosmic_query=state["last_cosmic_query"]
-                    )
-                    
-                    selected_category = resp.get("selected_category")
-                    if not selected_category:
-                        print("I couldn't identify a technical issue category. Could you describe the problem again?")
-                        cosmic_search_mode = True  # Return to cosmic search mode
-                        continue
-                    
-                    # Find the matching issue from known_questions.json
-                    issue = None
-                    for item in KNOWN_QUESTIONS:
-                        if item.get("issue_category") == selected_category:
-                            issue = item
-                            break
-                    
-                    if not issue:
-                        print("I couldn't find the selected category. Could you describe the problem again?")
-                        cosmic_search_mode = True  # Return to cosmic search mode
-                        continue
-                    
-                    questions = issue["questions_to_ask"]
-                    answered = [False] * len(questions)
-                    
-                    # Fill in ticket base fields
-                    state["assigned_queue"] = issue["queue"]
-                    state["category"] = issue["issue_category"]
-                    state["priority"] = issue["urgency_level"]
-                    state["description"] = problem_description
-                    state["conversation_topic"] = problem_description
-                    
-                    ticket_mode = True
-                    
-                    # Check if the last_cosmic_query already contains answers to any questions
-                    initial_analysis_prompt = f"CRITICAL: Analyze the user's cosmic query that prompted ticket creation. The user asked: '{problem_description}'. Review ALL questions in the remaining_questions array and identify which ones have already been answered in this query. Look for: time references (when did it start, how long), location mentions (room, area, floor), symptoms (heating, cooling, sounds, temperature), impact statements, damage descriptions, etc. IMPORTANT: If the user explicitly states that information is unknown, unavailable, not available, or will never be known (e.g., 'unknown', 'unavailable', 'forever unknown', 'cannot be determined'), mark that question as ANSWERED with 'unknown' as the answer. Be thorough - if the user mentioned ANY information that answers a question OR explicitly stated information is unknown, mark it as answered. Return the indices (0-based) of ALL questions that are already answered in answered_question_indices, and extract any relevant information into state_updates."
-                    initial_resp = call_llm(initial_analysis_prompt, ticket_mode, cosmic_search_mode=False, state=state, questions=questions, answered=answered, history=history, last_cosmic_query=state["last_cosmic_query"])
-                    
-                    # Mark questions that were already answered
-                    initial_answered_indices = initial_resp.get("answered_question_indices", [])
-                    if isinstance(initial_answered_indices, list):
-                        for idx in initial_answered_indices:
-                            if isinstance(idx, int) and 0 <= idx < len(questions):
-                                answered[idx] = True
-                    
-                    # Update state with any information extracted
-                    initial_updates = initial_resp.get("state_updates", {})
-                    for k, v in initial_updates.items():
-                        if isinstance(v, str):
-                            if v.strip():
-                                state[k] = v
-                        elif v:
-                            state[k] = v
-                    
-                    # Immediately ask all remaining unanswered questions
-                    # Only ask if there are unanswered questions
-                    if not all(answered):
-                        resp = call_llm("Please ask all the required questions.", ticket_mode, cosmic_search_mode=False, state=state, questions=questions, answered=answered, history=history, last_cosmic_query=state["last_cosmic_query"])
-                        response_time = resp.get("_response_time", 0)
-                        assistant_reply = resp["assistant_reply"]
-                        print(f"{assistant_reply} [{response_time:.2f}s]\n")
-                        history.append({"role": "assistant", "content": assistant_reply})
-                        continue
-                    # If all questions are already answered (shouldn't happen, but handle it)
-                    # Don't show ticket summary immediately - wait for user input first
-                    continue
+                continue
                     
             except Exception as e:
                 print(f"\nError performing cosmic search: {str(e)}\n")

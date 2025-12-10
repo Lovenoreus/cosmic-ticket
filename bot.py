@@ -18,6 +18,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent / "tools"))
 from tools.vector_database_tools import cosmic_database_tool2
 import config
+from jira_ticket_tool import create_jira_ticket
 
 load_dotenv()
 
@@ -725,31 +726,124 @@ Generate a short, descriptive title (3-10 words, use underscores instead of spac
     # Generate UUID
     ticket_uuid = str(uuid.uuid4())
     
+    # Format conversation history as strings
+    conversation_history_str = []
+    for msg in conversation_history:
+        if isinstance(msg, HumanMessage):
+            conversation_history_str.append(f"User: {msg.content}")
+        elif isinstance(msg, AIMessage):
+            conversation_history_str.append(f"AI Assistant: {msg.content}")
+    
+    # Add current user input if not already in history
+    if user_input:
+        user_input_str = f"User: {user_input}"
+        if not any(msg == user_input_str for msg in conversation_history_str):
+            conversation_history_str.append(user_input_str)
+    
+    # Generate summary using LLM
+    summary_prompt = """You are a ticket summary generator. Your task is to create a comprehensive summary of a support ticket based on:
+1. The user's problem description
+2. Questions asked and their answers
+3. The conversation history
+
+The summary should:
+- Include all key information from the questions and answers
+- Include any special information the user mentioned
+- Be concise but comprehensive
+- Be written in clear, professional language
+- Focus on the problem and relevant details
+
+Return ONLY the summary text, nothing else."""
+
+    # Build context for summary generation
+    summary_context_parts = [f"User Problem: {user_problem}"]
+    
+    if questions:
+        summary_context_parts.append("\nQuestions and Answers:")
+        for q in questions:
+            if q.answered and q.answer:
+                answer_text = q.answer if q.answer != "unknown" else "User indicated they do not know"
+                summary_context_parts.append(f"Q: {q.question}")
+                summary_context_parts.append(f"A: {answer_text}")
+    
+    summary_context_parts.append("\nConversation History:")
+    summary_context_parts.append("\n".join(conversation_history_str))
+    
+    summary_context = "\n".join(summary_context_parts)
+    
+    summary_user_prompt = f"""Generate a comprehensive summary for this support ticket:
+
+{summary_context}
+
+Create a summary that includes all important details from the questions, answers, and conversation."""
+    
+    try:
+        summary_messages = [
+            SystemMessage(content=summary_prompt),
+            HumanMessage(content=summary_user_prompt)
+        ]
+        summary_response = llm.invoke(summary_messages)
+        summary = summary_response.content.strip()
+    except Exception as e:
+        if config.DEBUG:
+            print(f"Summary generation failed: {e}")
+        # Fallback summary
+        summary = user_problem
+        if questions:
+            answered = [q for q in questions if q.answered and q.answer and q.answer != "unknown"]
+            if answered:
+                summary += "\n\nKey Information: " + "; ".join([q.answer for q in answered[:3]])
+    
+    # Get values from matched template
+    assigned_queue = matched_template.get("queue", "Technical Support")
+    category = matched_template.get("issue_category", "")
+    priority = "High"  # Hard coded
+    name = "Love Noreus"  # Hard coded
+    
+    # Format conversation history for Jira description
+    conversation_history_formatted = "\n".join(conversation_history_str)
+    
+    # Format description according to requirements
+    ticket_title_display = ticket_title.replace("_", " ")
+    description = f"""Summary:
+
+{summary}
+
+Assigned Queue:
+
+{assigned_queue}
+
+Priority:
+
+{priority}
+
+Name:
+
+{name}
+
+Category:
+
+{category}
+
+Conversation Topic:
+
+{ticket_title_display}
+
+Conversation History: 
+
+{conversation_history_formatted}"""
+    
     # Build ticket data
     ticket_data = {
         "ticket_title": ticket_title,
         "ticket_uuid": ticket_uuid,
         "description": user_problem,
-        "category": matched_template.get("issue_category", ""),
-        "assigned_queue": matched_template.get("queue", ""),
-        "priority": matched_template.get("urgency_level", ""),
+        "category": category,
+        "assigned_queue": assigned_queue,
+        "priority": priority,
         "questions": [q.to_dict() for q in questions],
-        "conversation_history": []
+        "conversation_history": conversation_history_str
     }
-    
-    # Include entire conversation history in the ticket as formatted strings
-    for msg in conversation_history:
-        if isinstance(msg, HumanMessage):
-            ticket_data["conversation_history"].append(f"User: {msg.content}")
-        elif isinstance(msg, AIMessage):
-            ticket_data["conversation_history"].append(f"AI Assistant: {msg.content}")
-    
-    # Add current user input if not already in history
-    if user_input:
-        # Check if user input is already in history (as a string)
-        user_input_str = f"User: {user_input}"
-        if not any(msg == user_input_str for msg in ticket_data["conversation_history"]):
-            ticket_data["conversation_history"].append(user_input_str)
     
     # Save ticket to file
     tickets_dir = Path(__file__).parent / "tickets"
@@ -758,6 +852,29 @@ Generate a short, descriptive title (3-10 words, use underscores instead of spac
     filename = f"{ticket_title}_{ticket_uuid}.json"
     filepath = tickets_dir / filename
     
+    # Create Jira ticket
+    jira_result = None
+    try:
+        jira_result = create_jira_ticket(
+            conversation_topic=ticket_title_display,
+            description=description,
+            queue=assigned_queue,
+            priority=priority,
+            name=name,
+            category=category
+        )
+        
+        if config.DEBUG:
+            if jira_result.get("success"):
+                print(f"Jira ticket created: {jira_result.get('key', 'Unknown')}")
+            else:
+                print(f"Jira ticket creation failed: {jira_result.get('error', 'Unknown error')}")
+    except Exception as e:
+        if config.DEBUG:
+            print(f"Error creating Jira ticket: {e}")
+        jira_result = {"success": False, "error": str(e)}
+    
+    # Save JSON ticket to file
     try:
         with open(filepath, "w", encoding="utf-8") as f:
             json.dump(ticket_data, f, indent=2, ensure_ascii=False)
@@ -766,7 +883,14 @@ Generate a short, descriptive title (3-10 words, use underscores instead of spac
             print(f"Ticket saved to: {filepath}")
         
         # Generate bot response
-        bot_response = f"Ticket created successfully! Ticket ID: {ticket_uuid}\nTitle: {ticket_title.replace('_', ' ').title()}\nSaved to: {filename}"
+        jira_info = ""
+        if jira_result and jira_result.get("success"):
+            jira_key = jira_result.get("key", "Unknown")
+            jira_info = f"\nJira Ticket: {jira_key}"
+        elif jira_result and not jira_result.get("success"):
+            jira_info = f"\nJira Ticket: Failed to create ({jira_result.get('error', 'Unknown error')})"
+        
+        bot_response = f"Ticket created successfully! Ticket ID: {ticket_uuid}\nTitle: {ticket_title_display.title()}\nSaved to: {filename}{jira_info}"
         
     except Exception as e:
         if config.DEBUG:

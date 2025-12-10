@@ -737,25 +737,19 @@ Generate a short, descriptive title (3-10 words, use underscores instead of spac
         "conversation_history": []
     }
     
-    # Include entire conversation history in the ticket
+    # Include entire conversation history in the ticket as formatted strings
     for msg in conversation_history:
         if isinstance(msg, HumanMessage):
-            ticket_data["conversation_history"].append({
-                "role": "user",
-                "content": msg.content
-            })
+            ticket_data["conversation_history"].append(f"User: {msg.content}")
         elif isinstance(msg, AIMessage):
-            ticket_data["conversation_history"].append({
-                "role": "assistant",
-                "content": msg.content
-            })
+            ticket_data["conversation_history"].append(f"AI Assistant: {msg.content}")
     
     # Add current user input if not already in history
-    if user_input and not any(msg.get("content") == user_input for msg in ticket_data["conversation_history"]):
-        ticket_data["conversation_history"].append({
-            "role": "user",
-            "content": user_input
-        })
+    if user_input:
+        # Check if user input is already in history (as a string)
+        user_input_str = f"User: {user_input}"
+        if not any(msg == user_input_str for msg in ticket_data["conversation_history"]):
+            ticket_data["conversation_history"].append(user_input_str)
     
     # Save ticket to file
     tickets_dir = Path(__file__).parent / "tickets"

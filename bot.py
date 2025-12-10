@@ -735,121 +735,18 @@ Generate a short, descriptive title (3-10 words, use underscores instead of spac
         "conversation_history": []
     }
     
-    # Use LLM to intelligently curate conversation history
-    # Build context about the ticket
-    ticket_context_parts = [
-        f"Ticket Problem: {user_problem}",
-        f"Cosmic Query: {last_cosmic_query}" if last_cosmic_query else "No cosmic query",
-    ]
-    
-    if matched_template:
-        ticket_context_parts.append(f"\nMatched Template:")
-        ticket_context_parts.append(f"  Issue Category: {matched_template.get('issue_category', '')}")
-        ticket_context_parts.append(f"  Description: {matched_template.get('description', '')}")
-        ticket_context_parts.append(f"  Queue: {matched_template.get('queue', '')}")
-        ticket_context_parts.append(f"  Urgency: {matched_template.get('urgency_level', '')}")
-    
-    if questions:
-        ticket_context_parts.append(f"\nQuestions and Answers:")
-        for q in questions:
-            if q.answered:
-                ticket_context_parts.append(f"  Q{q.index}: {q.question}")
-                ticket_context_parts.append(f"    A: {q.answer if q.answer != 'unknown' else 'User indicated they do not know'}")
-            else:
-                ticket_context_parts.append(f"  Q{q.index}: {q.question} (not answered)")
-    
-    ticket_context = "\n".join(ticket_context_parts)
-    
-    # Format conversation history for the LLM
-    formatted_history = []
-    for i, msg in enumerate(conversation_history):
+    # Include entire conversation history in the ticket
+    for msg in conversation_history:
         if isinstance(msg, HumanMessage):
-            formatted_history.append(f"[{i}] USER: {msg.content}")
+            ticket_data["conversation_history"].append({
+                "role": "user",
+                "content": msg.content
+            })
         elif isinstance(msg, AIMessage):
-            formatted_history.append(f"[{i}] ASSISTANT: {msg.content}")
-    
-    conversation_text = "\n".join(formatted_history)
-    
-    # Create prompt for LLM to curate conversation history
-    curation_system_prompt = """You are a conversation history curator for support tickets. Your task is to identify which messages from the conversation history are relevant to a specific support ticket.
-
-You will be given:
-1. Ticket context (problem description, cosmic query, matched template, questions and answers)
-2. The full conversation history from the session
-
-Your job is to determine which messages should be included in the ticket's conversation history. Include messages that:
-- Are related to the ticket problem (e.g., the cosmic query that led to the ticket)
-- Contain the cosmic query or cosmic search response
-- Are part of the ticket creation process (e.g., "create a ticket" request)
-- Are question-answer interactions for the ticket
-- Provide context about the problem being reported
-
-Exclude messages that:
-- Are unrelated to this specific ticket
-- Are from earlier conversations about different topics
-- Are system messages or internal agent communications
-
-Return ONLY a JSON object with this structure:
-{{
-  "relevant_indices": [<list of message indices (0-based) to include, in order>]
-}}
-
-The indices should be in ascending order (maintaining the original conversation order).
-Only include indices that correspond to messages that should be part of the ticket history."""
-
-    curation_user_prompt = f"""Ticket Context:
-{ticket_context}
-
-Full Conversation History:
-{conversation_text}
-
-Identify which messages (by index) should be included in this ticket's conversation history. Return the JSON with relevant_indices."""
-
-    try:
-        curation_messages = [
-            SystemMessage(content=curation_system_prompt),
-            HumanMessage(content=curation_user_prompt)
-        ]
-        curation_response = llm.invoke(curation_messages)
-        curation_text = curation_response.content.strip()
-        
-        # Parse the JSON response
-        curation_result = parse_json_from_response(curation_text, default={"relevant_indices": []})
-        relevant_indices = curation_result.get("relevant_indices", [])
-        
-        # Extract relevant messages based on indices
-        for idx in relevant_indices:
-            if 0 <= idx < len(conversation_history):
-                msg = conversation_history[idx]
-                if isinstance(msg, HumanMessage):
-                    ticket_data["conversation_history"].append({
-                        "role": "user",
-                        "content": msg.content
-                    })
-                elif isinstance(msg, AIMessage):
-                    ticket_data["conversation_history"].append({
-                        "role": "assistant",
-                        "content": msg.content
-                    })
-        
-        if config.DEBUG:
-            print(f"LLM selected {len(relevant_indices)} messages from {len(conversation_history)} total messages")
-    
-    except Exception as e:
-        if config.DEBUG:
-            print(f"Error in conversation history curation: {e}")
-        # Fallback: include all messages if LLM call fails
-        for msg in conversation_history:
-            if isinstance(msg, HumanMessage):
-                ticket_data["conversation_history"].append({
-                    "role": "user",
-                    "content": msg.content
-                })
-            elif isinstance(msg, AIMessage):
-                ticket_data["conversation_history"].append({
-                    "role": "assistant",
-                    "content": msg.content
-                })
+            ticket_data["conversation_history"].append({
+                "role": "assistant",
+                "content": msg.content
+            })
     
     # Add current user input if not already in history
     if user_input and not any(msg.get("content") == user_input for msg in ticket_data["conversation_history"]):
@@ -1036,7 +933,7 @@ def main():
             # Display bot response (from cosmic_search_agent or default)
             bot_response = result.get("bot_response")
             if bot_response:
-                print(f"Bot: {bot_response} ({response_time:.3f}s)\n")
+                print(f"\nBot: {bot_response} ({response_time:.3f}s)\n")
             else:
                 # Fallback if no agent set a response (e.g., start_ticket mode)
                 intent = result.get("intent", {})

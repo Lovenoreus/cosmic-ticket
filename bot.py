@@ -978,6 +978,9 @@ workflow.add_edge("create_ticket", END)
 # Compile the graph
 app = workflow.compile()
 
+# Global state storage for multiple conversations (keyed by chat_id)
+_conversation_states: Dict[str, dict] = {}
+
 
 def get_initial_state() -> dict:
     """Return the initial state dictionary as if the application just started"""
@@ -993,12 +996,145 @@ def get_initial_state() -> dict:
     }
 
 
+def process_message(chat_id: str, user_message: str) -> dict:
+    """
+    Process a single user message and return bot response.
+    This function can be imported and used by external libraries (e.g., MCP server).
+    
+    Args:
+        chat_id: Unique identifier for the conversation thread
+        user_message: The user's message to process
+    
+    Returns:
+        dict: Response containing:
+            - success: bool
+            - message: str (bot response)
+            - ticket_mode: bool (whether in ticket creation mode)
+            - ticket_ready: bool (whether ticket is ready to be created)
+            - questions: list (current questions if in ticket mode)
+            - answered_questions: list (answered questions if in ticket mode)
+    """
+    # Initialize or get conversation state
+    if chat_id not in _conversation_states:
+        _conversation_states[chat_id] = get_initial_state()
+    
+    global_state = _conversation_states[chat_id]
+    
+    if not user_message or not user_message.strip():
+        return {
+            "success": False,
+            "message": "Please provide a message to process.",
+            "ticket_mode": global_state.get("questioning", False),
+            "ticket_ready": False
+        }
+    
+    user_input = user_message.strip()
+    
+    try:
+        # Prepare state for this invocation (merge with global state)
+        current_state = {
+            "user_input": user_input,
+            "conversation_history": global_state.get("conversation_history", []),
+            "last_cosmic_query": global_state.get("last_cosmic_query"),
+            "last_cosmic_query_response": global_state.get("last_cosmic_query_response"),
+            "bot_response": None,
+            "known_problem_identified": global_state.get("known_problem_identified", False),
+            "questioning": global_state.get("questioning", False),
+            "questions": global_state.get("questions", []),
+            "first_question_run_complete": global_state.get("first_question_run_complete", False)
+        }
+        
+        # Preserve matched_template if it exists
+        if "matched_template" in global_state:
+            current_state["matched_template"] = global_state["matched_template"]
+        
+        # Run the graph
+        result = app.invoke(current_state)
+        
+        # Update global state with the result
+        _conversation_states[chat_id].update({
+            "conversation_history": result.get("conversation_history", []),
+            "last_cosmic_query": result.get("last_cosmic_query"),
+            "last_cosmic_query_response": result.get("last_cosmic_query_response"),
+            "bot_response": result.get("bot_response"),
+            "known_problem_identified": result.get("known_problem_identified", False),
+            "questioning": result.get("questioning", False),
+            "questions": result.get("questions", []),
+            "first_question_run_complete": result.get("first_question_run_complete", False)
+        })
+        
+        # Preserve matched_template if it exists
+        if "matched_template" in result:
+            _conversation_states[chat_id]["matched_template"] = result["matched_template"]
+        
+        # Get bot response
+        bot_response = result.get("bot_response")
+        if not bot_response:
+            # Fallback if no agent set a response
+            intent = result.get("intent", {})
+            bot_response = json.dumps(intent)
+        
+        # Determine ticket mode and status
+        questioning = result.get("questioning", False)
+        questions = result.get("questions", [])
+        ticket_ready = False
+        
+        if questions:
+            all_answered = all(q.get("answered", False) for q in questions)
+            ticket_ready = all_answered and result.get("first_question_run_complete", False)
+        
+        # Build response
+        response = {
+            "success": True,
+            "message": bot_response,
+            "ticket_mode": questioning,
+            "ticket_ready": ticket_ready
+        }
+        
+        # Add question information if in ticket mode
+        if questioning and questions:
+            response["questions"] = questions
+            answered_questions = [q for q in questions if q.get("answered", False)]
+            response["answered_questions"] = answered_questions
+            response["unanswered_questions"] = [q for q in questions if not q.get("answered", False)]
+        
+        return response
+        
+    except Exception as e:
+        if config.DEBUG:
+            import traceback
+            traceback.print_exc()
+        return {
+            "success": False,
+            "message": f"An error occurred: {str(e)}",
+            "ticket_mode": False,
+            "ticket_ready": False,
+            "error": str(e)
+        }
+
+
+def reset_conversation(chat_id: str) -> bool:
+    """
+    Reset a conversation state to initial state.
+    
+    Args:
+        chat_id: Unique identifier for the conversation thread
+    
+    Returns:
+        bool: True if conversation was reset, False if conversation didn't exist
+    """
+    if chat_id in _conversation_states:
+        _conversation_states[chat_id] = get_initial_state()
+        return True
+    return False
+
+
 def main():
     """Main loop for terminal interaction"""
     print("Intent Detection Bot - Type 'exit' to quit\n")
     
-    # Initialize global state
-    global_state = get_initial_state()
+    # Use a default chat_id for terminal mode
+    terminal_chat_id = "terminal_session"
     
     while True:
         try:
@@ -1014,53 +1150,19 @@ def main():
             # Start timing
             start_time = time.time()
             
-            # Prepare state for this invocation (merge with global state)
-            current_state = {
-                "user_input": user_input,
-                "conversation_history": global_state.get("conversation_history", []),
-                "last_cosmic_query": global_state.get("last_cosmic_query"),
-                "last_cosmic_query_response": global_state.get("last_cosmic_query_response"),
-                "bot_response": None,
-                "known_problem_identified": global_state.get("known_problem_identified", False),
-                "questioning": global_state.get("questioning", False),
-                "questions": global_state.get("questions", []),
-                "first_question_run_complete": global_state.get("first_question_run_complete", False)
-            }
-            
-            # Preserve matched_template if it exists
-            if "matched_template" in global_state:
-                current_state["matched_template"] = global_state["matched_template"]
-            
-            # Run the graph
-            result = app.invoke(current_state)
-            
-            # Update global state with the result
-            global_state.update({
-                "conversation_history": result.get("conversation_history", []),
-                "last_cosmic_query": result.get("last_cosmic_query"),
-                "last_cosmic_query_response": result.get("last_cosmic_query_response"),
-                "bot_response": result.get("bot_response"),
-                "known_problem_identified": result.get("known_problem_identified", False),
-                "questioning": result.get("questioning", False),
-                "questions": result.get("questions", []),
-                "first_question_run_complete": result.get("first_question_run_complete", False)
-            })
-            
-            # Preserve matched_template if it exists
-            if "matched_template" in result:
-                global_state["matched_template"] = result["matched_template"]
+            # Process message using the process_message function
+            result = process_message(terminal_chat_id, user_input)
             
             # Calculate response time
             response_time = time.time() - start_time
             
-            # Display bot response (from cosmic_search_agent or default)
-            bot_response = result.get("bot_response")
-            if bot_response:
+            # Display bot response
+            if result.get("success"):
+                bot_response = result.get("message", "")
                 print(f"\nBot: {bot_response} ({response_time:.3f}s)\n")
             else:
-                # Fallback if no agent set a response (e.g., start_ticket mode)
-                intent = result.get("intent", {})
-                print(f"Bot: {json.dumps(intent)} ({response_time:.3f}s)\n")
+                error_msg = result.get("message", "Unknown error")
+                print(f"\nError: {error_msg} ({response_time:.3f}s)\n")
             
         except KeyboardInterrupt:
             print("\nGoodbye!")

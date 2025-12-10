@@ -84,8 +84,10 @@ def detect_intent(state: AgentState) -> AgentState:
     if questions:
         all_answered = all(q.get("answered", False) for q in questions)
     
-    # If all questions are answered (regardless of questioning flag), route to create_ticket
-    if questions and all_answered:
+    first_question_run_complete = state.get("first_question_run_complete", False)
+    
+    # If all questions are answered AND questions have been asked at least once, route to create_ticket
+    if questions and all_answered and first_question_run_complete:
         # Add user input to conversation history before routing
         updated_history = conversation_history + [HumanMessage(content=user_input)]
         return {"intent": {"mode": "create_ticket"}, "conversation_history": updated_history}
@@ -286,10 +288,10 @@ Analyze the user's problem and identify the best matching template. Return ONLY 
         match_result = parse_json_from_response(response_text, default={"matched_index": -1, "confidence": 0.0, "reasoning": "Failed to parse response"})
         matched_index = match_result.get("matched_index", -1)
         confidence = match_result.get("confidence", 0.0)
-
-        print(f"Matched index: {matched_index}")
-        print(f"Confidence: {confidence}")
-        print(f"Reasoning: {match_result.get('reasoning', 'No reasoning provided')}")
+        if config.DEBUG:
+            print(f"Matched index: {matched_index}")
+            print(f"Confidence: {confidence}")
+            print(f"Reasoning: {match_result.get('reasoning', 'No reasoning provided')}")
         
         # If we have a valid match with reasonable confidence
         if matched_index >= 0 and matched_index < len(KNOWN_QUESTIONS) and confidence >= 0.5:
@@ -799,10 +801,17 @@ def route_after_intent(state: AgentState) -> str:
     intent = state.get("intent", {})
     mode = intent.get("mode", "cosmic_search")
     questioning = state.get("questioning", False)
+    first_question_run_complete = state.get("first_question_run_complete", False)
     
-    # If create_ticket mode, route to create_ticket agent
+    # If create_ticket mode, only route to create_ticket if questions have been asked
+    # Otherwise, route to start_ticket flow
     if mode == "create_ticket":
-        return "create_ticket"
+        if first_question_run_complete:
+            return "create_ticket"
+        else:
+            # User wants to create ticket but questions haven't been asked yet
+            # Route to start_ticket flow instead
+            return "identify_known_question_agent"
     # If questioning is active, always route to questioner_agent
     elif questioning or mode == "questioning":
         return "questioner_agent"

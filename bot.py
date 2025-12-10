@@ -779,19 +779,10 @@ Generate a short, descriptive title (3-10 words, use underscores instead of spac
             print(f"Error saving ticket: {e}")
         bot_response = f"Error creating ticket: {str(e)}"
     
-    # Update state
-    updated_state = dict(state)
+    # Reset state to initial state after ticket creation
+    # The conversation history is already included in the ticket, so we can clear it completely
+    updated_state = get_initial_state()
     updated_state["bot_response"] = bot_response
-    updated_state["questioning"] = False  # Stop questioning
-    
-    # Update conversation history
-    updated_history = list(conversation_history)
-    if not updated_history or (isinstance(updated_history[-1], HumanMessage) and updated_history[-1].content != user_input):
-        updated_history.append(HumanMessage(content=user_input))
-    updated_history.append(AIMessage(content=bot_response))
-    updated_state["conversation_history"] = updated_history
-
-    print(conversation_history)
     
     return updated_state
 
@@ -870,12 +861,9 @@ workflow.add_edge("create_ticket", END)
 app = workflow.compile()
 
 
-def main():
-    """Main loop for terminal interaction"""
-    print("Intent Detection Bot - Type 'exit' to quit\n")
-    
-    # Initialize global state
-    global_state = {
+def get_initial_state() -> dict:
+    """Return the initial state dictionary as if the application just started"""
+    return {
         "conversation_history": [],
         "last_cosmic_query": None,
         "last_cosmic_query_response": None,
@@ -885,6 +873,14 @@ def main():
         "questions": [],
         "first_question_run_complete": False
     }
+
+
+def main():
+    """Main loop for terminal interaction"""
+    print("Intent Detection Bot - Type 'exit' to quit\n")
+    
+    # Initialize global state
+    global_state = get_initial_state()
     
     while True:
         try:

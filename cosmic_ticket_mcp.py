@@ -502,6 +502,94 @@ async def mcp_tools_list(request: Request):
     return MCPToolsListResponse(tools=all_tools)
 
 
+@app.post("/mcp/tools/call", response_model=MCPToolCallResponse)
+async def mcp_tools_call(request: MCPToolCallRequest):
+    """MCP Protocol: Call a specific tool"""
+    try:
+        tool_name = request.name
+        arguments = request.arguments
+
+        if DEBUG:
+            print(f"[MCP] Calling tool: {tool_name} with args: {arguments}")
+
+        if tool_name == "cosmic_chat":
+            user_input = arguments.get("user_input", "")
+            session_id = arguments.get("session_id", None)
+
+            if not user_input:
+                return MCPToolCallResponse(
+                    content=[MCPContent(type="text", text="Error: user_input is required")],
+                    isError=True
+                )
+
+            # Get or create session
+            session_id, session_state = get_or_create_session(session_id)
+
+            # Prepare state
+            current_state = {
+                "user_input": user_input,
+                "conversation_history": session_state.get("conversation_history", []),
+                "last_cosmic_query": session_state.get("last_cosmic_query"),
+                "last_cosmic_query_response": session_state.get("last_cosmic_query_response"),
+                "bot_response": None,
+                "known_problem_identified": session_state.get("known_problem_identified", False),
+                "questioning": session_state.get("questioning", False),
+                "questions": session_state.get("questions", []),
+                "first_question_run_complete": session_state.get("first_question_run_complete", False)
+            }
+
+            if "matched_template" in session_state:
+                current_state["matched_template"] = session_state["matched_template"]
+
+            # Run workflow
+            result = await workflow_app.ainvoke(current_state)
+
+            # Update session
+            sessions[session_id] = {
+                "conversation_history": result.get("conversation_history", []),
+                "last_cosmic_query": result.get("last_cosmic_query"),
+                "last_cosmic_query_response": result.get("last_cosmic_query_response"),
+                "known_problem_identified": result.get("known_problem_identified", False),
+                "questioning": result.get("questioning", False),
+                "questions": result.get("questions", []),
+                "first_question_run_complete": result.get("first_question_run_complete", False)
+            }
+
+            if "matched_template" in result:
+                sessions[session_id]["matched_template"] = result["matched_template"]
+
+            # Prepare response
+            response_data = {
+                "bot_response": result.get("bot_response", "I'm not sure how to respond."),
+                "session_id": session_id,
+                "intent": result.get("intent"),
+                "questioning": result.get("questioning", False),
+                "questions": result.get("questions"),
+                "metadata": {
+                    "matched_template": result.get("matched_template", {}).get("issue_category") if result.get(
+                        "matched_template") else None,
+                    "match_confidence": result.get("match_confidence")
+                }
+            }
+
+            return MCPToolCallResponse(
+                content=[MCPContent(type="text", text=json.dumps(response_data, indent=2))]
+            )
+
+        else:
+            return MCPToolCallResponse(
+                content=[MCPContent(type="text", text=f"Unknown tool: {tool_name}")],
+                isError=True
+            )
+
+    except Exception as e:
+        if DEBUG:
+            print(f"[MCP] Error calling tool {request.name}: {e}")
+
+        return MCPToolCallResponse(
+            content=[MCPContent(type="text", text=f"Error: {str(e)}")],
+            isError=True
+        )
 
 
 @app.post("/")

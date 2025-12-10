@@ -514,7 +514,10 @@ async def mcp_tools_call(request: MCPToolCallRequest):
 
         if tool_name == "cosmic_chat":
             user_input = arguments.get("user_input", "")
-            session_id = arguments.get("session_id", None)
+            # session_id = arguments.get("session_id", None)
+            # TODO: Overwrote the dynamic session id that is meant to be collected from the frontend and used with a
+            #  static session id.
+            session_id = "6aca3d3f-9b36-4f20-93d1-46cc22e16e34"
 
             if not user_input:
                 return MCPToolCallResponse(

@@ -67,6 +67,7 @@ class AgentState(TypedDict):
     known_problem_identified: bool
     questioning: bool
     questions: List[Dict[str, Any]]  # List of Question dicts
+    first_question_run_complete: bool
 
 
 def detect_intent(state: AgentState) -> AgentState:
@@ -290,6 +291,7 @@ def questioner_agent(state: AgentState) -> AgentState:
     conversation_history = state.get("conversation_history", [])
     last_cosmic_query = state.get("last_cosmic_query", "")
     matched_template = state.get("matched_template", {})
+    first_question_run_complete = state.get("first_question_run_complete", False)
     
     # If no questions initialized, return error state
     if not questions_data:
@@ -304,100 +306,111 @@ def questioner_agent(state: AgentState) -> AgentState:
     # Get user problem description
     user_problem = last_cosmic_query if last_cosmic_query else user_input
     
-    # First, scan conversation history for answers if this is the first run
-    if not any(q.answered for q in questions):
-        # Extract conversation text for analysis
-        conversation_text = ""
-        for msg in conversation_history:
-            if isinstance(msg, HumanMessage):
-                conversation_text += f"User: {msg.content}\n"
-            elif isinstance(msg, AIMessage):
-                conversation_text += f"Assistant: {msg.content}\n"
-        
-        # Use LLM to extract answers from conversation history
-        if conversation_text:
-            system_prompt = """You are an information extraction agent. Your task is to identify which questions have already been answered in the conversation history.
-
-            You will be given:
-            1. A list of questions that need answers
-            2. The full conversation history
-
-            For each question, determine if an answer can be found in the conversation history. If yes, extract the answer. If the user explicitly said they don't know or similar phrases, mark the answer as "unknown".
-
-            Return ONLY a JSON object with this structure:
-            {
-            "answers": [
-                {
-                "question_index": <1-based index>,
-                "answered": <true if answer found, false otherwise>,
-                "answer": "<extracted answer or 'unknown' if user said they don't know, or null if not answered>"
-                },
-                ...
-            ]
-            }"""
-
-            questions_text = "\n".join([f"{q.index}. {q.question}" for q in questions])
-            user_prompt = f"""Questions to check:
-            {questions_text}
-
-            Conversation History:
-            {conversation_text}
-
-            Analyze the conversation and identify which questions have been answered. Return ONLY the JSON response."""
-
-            messages = [
-                SystemMessage(content=system_prompt),
-                HumanMessage(content=user_prompt)
-            ]
+    # First run: scan conversation history and current input, return full formatted response
+    if not first_question_run_complete:
+        # First, scan conversation history for answers
+        if not any(q.answered for q in questions):
+            # Extract conversation text for analysis
+            conversation_text = ""
+            for msg in conversation_history:
+                if isinstance(msg, HumanMessage):
+                    conversation_text += f"User: {msg.content}\n"
+                elif isinstance(msg, AIMessage):
+                    conversation_text += f"Assistant: {msg.content}\n"
             
-            try:
-                response = llm.invoke(messages)
-                response_text = response.content.strip()
-                history_answers = parse_json_from_response(response_text, default={"answers": []})
+            # Use LLM to extract answers from conversation history
+            if conversation_text:
+                system_prompt = """You are an information extraction agent. Your task is to identify which questions have already been answered in the conversation history.
+
+You will be given:
+1. A list of questions that need answers
+2. The full conversation history
+
+For each question, determine if an answer can be found in the conversation history. If yes, extract the answer. If the user explicitly said they don't know or similar phrases, mark the answer as "unknown".
+
+Return ONLY a JSON object with this structure:
+{
+  "answers": [
+    {
+      "question_index": <1-based index>,
+      "answered": <true if answer found, false otherwise>,
+      "answer": "<extracted answer or 'unknown' if user said they don't know, or null if not answered>"
+    },
+    ...
+  ]
+}"""
+
+                questions_text = "\n".join([f"{q.index}. {q.question}" for q in questions])
+                user_prompt = f"""Questions to check:
+{questions_text}
+
+Conversation History:
+{conversation_text}
+
+Analyze the conversation and identify which questions have been answered. Return ONLY the JSON response."""
+
+                messages = [
+                    SystemMessage(content=system_prompt),
+                    HumanMessage(content=user_prompt)
+                ]
                 
-                # Update questions with answers from history
-                for answer_info in history_answers.get("answers", []):
-                    q_idx = answer_info.get("question_index", 0)
-                    if 1 <= q_idx <= len(questions):
-                        questions[q_idx - 1].answered = answer_info.get("answered", False)
-                        if answer_info.get("answered"):
-                            questions[q_idx - 1].answer = answer_info.get("answer", None)
-            except Exception as e:
-                # If extraction fails, continue without history answers
-                pass
+                try:
+                    response = llm.invoke(messages)
+                    response_text = response.content.strip()
+                    history_answers = parse_json_from_response(response_text, default={"answers": []})
+                    
+                    # Update questions with answers from history
+                    for answer_info in history_answers.get("answers", []):
+                        q_idx = answer_info.get("question_index", 0)
+                        if 1 <= q_idx <= len(questions):
+                            questions[q_idx - 1].answered = answer_info.get("answered", False)
+                            if answer_info.get("answered"):
+                                questions[q_idx - 1].answer = answer_info.get("answer", None)
+                except Exception as e:
+                    # If extraction fails, continue without history answers
+                    pass
     
-    # Now process current user input for answers (only if we have unanswered questions)
-    unanswered_before = [q for q in questions if not q.answered]
-    if user_input and unanswered_before:
-        # Use LLM to extract answers from current user input
-        unanswered_questions = [q for q in questions if not q.answered]
-        if unanswered_questions:
-            system_prompt = """You are an answer extraction agent. Your task is to identify which questions the user is answering in their current message.
+        # Now process current user input for answers (only if we have unanswered questions)
+        unanswered_before = [q for q in questions if not q.answered]
+        if user_input and unanswered_before:
+            # Use LLM to extract answers from current user input
+            unanswered_questions = [q for q in questions if not q.answered]
+            if unanswered_questions:
+                system_prompt = """You are an answer extraction agent. Your task is to identify which questions the user is answering in their current message.
 
-            The user may:
-            1. Answer one question
-            2. Answer multiple questions at once
-            3. Say they don't know (which is a valid answer - mark as "unknown")
-            4. Provide partial information
+The user may:
+1. Answer one question
+2. Answer multiple questions at once
+3. Say they don't know (which is a valid answer - mark as "unknown")
+4. Say they don't know the answers to remaining/other questions (mark ALL remaining unanswered questions as "unknown")
+5. Provide partial information
 
-            For each question, determine if the user's message contains an answer. If the user says "I don't know", "I'm not sure", "no idea", or similar phrases, that is a valid answer and should be marked as "unknown".
+IMPORTANT: If the user says phrases like:
+- "I don't know the answers to the other questions"
+- "I don't know the remaining questions"
+- "I don't know answers to questions 4 and 5"
+- "I don't know" (when referring to multiple/all remaining questions)
 
-            Return ONLY a JSON object with this structure:
-            {
-            "answers": [
-                {
-                "question_index": <1-based index>,
-                "answered": <true if answer found in this message, false otherwise>,
-                "answer": "<extracted answer or 'unknown' if user said they don't know, or null if not answered>"
-                },
-                ...
-            ]
-            }
+Then you MUST mark ALL remaining unanswered questions as answered with "unknown".
 
-            Only include questions that were answered in THIS message. If a question was not answered in this message, don't include it."""
+For each question, determine if the user's message contains an answer. If the user says "I don't know", "I'm not sure", "no idea", or similar phrases, that is a valid answer and should be marked as "unknown".
 
-            questions_text = "\n".join([f"{q.index}. {q.question}" for q in unanswered_questions])
-            user_prompt = f"""Unanswered Questions:
+Return ONLY a JSON object with this structure:
+{
+  "answers": [
+    {
+      "question_index": <1-based index>,
+      "answered": <true if answer found in this message, false otherwise>,
+      "answer": "<extracted answer or 'unknown' if user said they don't know, or null if not answered>"
+    },
+    ...
+  ]
+}
+
+CRITICAL: If the user indicates they don't know answers to remaining/other questions, you MUST include ALL unanswered questions in the response with answer="unknown"."""
+
+                questions_text = "\n".join([f"{q.index}. {q.question}" for q in unanswered_questions])
+                user_prompt = f"""Unanswered Questions:
 {questions_text}
 
 User's Current Message:
@@ -405,58 +418,164 @@ User's Current Message:
 
 Analyze the user's message and identify which questions they are answering. Return ONLY the JSON response."""
 
-            messages = [
-                SystemMessage(content=system_prompt),
-                HumanMessage(content=user_prompt)
-            ]
-            
-            try:
-                response = llm.invoke(messages)
-                response_text = response.content.strip()
-                current_answers = parse_json_from_response(response_text, default={"answers": []})
+                messages = [
+                    SystemMessage(content=system_prompt),
+                    HumanMessage(content=user_prompt)
+                ]
                 
-                # Update questions with answers from current input
-                for answer_info in current_answers.get("answers", []):
-                    q_idx = answer_info.get("question_index", 0)
-                    if 1 <= q_idx <= len(questions):
-                        questions[q_idx - 1].answered = answer_info.get("answered", False)
-                        if answer_info.get("answered"):
-                            questions[q_idx - 1].answer = answer_info.get("answer", None)
-            except Exception as e:
-                # If extraction fails, continue
-                pass
-    
-    # Check if all questions are answered
-    all_answered = all(q.answered for q in questions)
-    
-    # Build bot response
-    answered_questions = [q for q in questions if q.answered]
-    unanswered_questions = [q for q in questions if not q.answered]
-    
-    bot_response_parts = []
-    
-    # Opening statement
-    issue_category = matched_template.get("issue_category", "this issue")
-    bot_response_parts.append(f"I understand that you want to create a support ticket for {user_problem}.")
-    
-    if answered_questions:
-        bot_response_parts.append("\nBut first I need to gather some information for the relevant department to better understand the problem.")
-        bot_response_parts.append("You have already given me answers for the below questions:\n")
-        for q in answered_questions:
-            answer_text = q.answer if q.answer != "unknown" else "you mentioned that you don't know"
-            bot_response_parts.append(f"{q.index}. {q.question}")
-            bot_response_parts.append(f"   You have already mentioned that {answer_text}")
-    
-    if unanswered_questions:
-        if not answered_questions:
+                try:
+                    response = llm.invoke(messages)
+                    response_text = response.content.strip()
+                    current_answers = parse_json_from_response(response_text, default={"answers": []})
+                    
+                    # Update questions with answers from current input
+                    for answer_info in current_answers.get("answers", []):
+                        q_idx = answer_info.get("question_index", 0)
+                        if 1 <= q_idx <= len(questions):
+                            questions[q_idx - 1].answered = answer_info.get("answered", False)
+                            if answer_info.get("answered"):
+                                questions[q_idx - 1].answer = answer_info.get("answer", None)
+                except Exception as e:
+                    # If extraction fails, continue
+                    pass
+        
+        # Check if all questions are answered
+        all_answered = all(q.answered for q in questions)
+        
+        # Build bot response - FULL FORMAT for first run
+        answered_questions = [q for q in questions if q.answered]
+        unanswered_questions = [q for q in questions if not q.answered]
+        
+        bot_response_parts = []
+        
+        # Opening statement
+        bot_response_parts.append(f"I understand that you want to create a support ticket for {user_problem}.")
+        
+        if answered_questions:
             bot_response_parts.append("\nBut first I need to gather some information for the relevant department to better understand the problem.")
-        bot_response_parts.append("\nPlease provide answers to the below questions:\n")
+            bot_response_parts.append("You have already given me answers for the below questions:\n")
+            for q in answered_questions:
+                answer_text = q.answer if q.answer != "unknown" else "you mentioned that you don't know"
+                bot_response_parts.append(f"{q.index}. {q.question}")
+                bot_response_parts.append(f"   You have already mentioned that {answer_text}")
+        
+        if unanswered_questions:
+            if not answered_questions:
+                bot_response_parts.append("\nBut first I need to gather some information for the relevant department to better understand the problem.")
+            bot_response_parts.append("\nPlease provide answers to the below questions:\n")
+            for q in unanswered_questions:
+                bot_response_parts.append(f"{q.index}. {q.question}")
+        else:
+            bot_response_parts.append("\nThank you! I have gathered all the necessary information.")
+        
+        bot_response = "\n".join(bot_response_parts)
+        
+        # Mark first run as complete
+        first_question_run_complete = True
+    
+    else:
+        # Subsequent runs: only process current user input, return simpler response
+        unanswered_before = [q for q in questions if not q.answered]
+        if user_input and unanswered_before:
+            # Use LLM to extract answers from current user input
+            unanswered_questions = [q for q in questions if not q.answered]
+            if unanswered_questions:
+                system_prompt = """You are an answer extraction agent. Your task is to identify which questions the user is answering in their current message.
+
+The user may:
+1. Answer one question
+2. Answer multiple questions at once
+3. Say they don't know (which is a valid answer - mark as "unknown")
+4. Say they don't know the answers to remaining/other questions (mark ALL remaining unanswered questions as "unknown")
+5. Provide partial information
+
+IMPORTANT: If the user says phrases like:
+- "I don't know the answers to the other questions"
+- "I don't know the remaining questions"
+- "I don't know answers to questions 4 and 5"
+- "I don't know" (when referring to multiple/all remaining questions)
+
+Then you MUST mark ALL remaining unanswered questions as answered with "unknown".
+
+For each question, determine if the user's message contains an answer. If the user says "I don't know", "I'm not sure", "no idea", or similar phrases, that is a valid answer and should be marked as "unknown".
+
+Return ONLY a JSON object with this structure:
+{
+  "answers": [
+    {
+      "question_index": <1-based index>,
+      "answered": <true if answer found in this message, false otherwise>,
+      "answer": "<extracted answer or 'unknown' if user said they don't know, or null if not answered>"
+    },
+    ...
+  ]
+}
+
+CRITICAL: If the user indicates they don't know answers to remaining/other questions, you MUST include ALL unanswered questions in the response with answer="unknown"."""
+
+                questions_text = "\n".join([f"{q.index}. {q.question}" for q in unanswered_questions])
+                user_prompt = f"""Unanswered Questions:
+{questions_text}
+
+User's Current Message:
+{user_input}
+
+Analyze the user's message and identify which questions they are answering. Return ONLY the JSON response."""
+
+                messages = [
+                    SystemMessage(content=system_prompt),
+                    HumanMessage(content=user_prompt)
+                ]
+                
+                try:
+                    response = llm.invoke(messages)
+                    response_text = response.content.strip()
+                    current_answers = parse_json_from_response(response_text, default={"answers": []})
+                    
+                    # Update questions with answers from current input
+                    for answer_info in current_answers.get("answers", []):
+                        q_idx = answer_info.get("question_index", 0)
+                        if 1 <= q_idx <= len(questions):
+                            questions[q_idx - 1].answered = answer_info.get("answered", False)
+                            if answer_info.get("answered"):
+                                questions[q_idx - 1].answer = answer_info.get("answer", None)
+                except Exception as e:
+                    # If extraction fails, continue
+                    pass
+        
+        # Check if all questions are answered
+        all_answered = all(q.answered for q in questions)
+        
+        # Build bot response - SIMPLER FORMAT for subsequent runs
+        unanswered_questions = [q for q in questions if not q.answered]
+        
+        # Generate varied intro message
+        import random
+        intro_options = [
+            "I see, what about",
+            "Thank you for your last input. Please proceed to answer below questions as well",
+            "Got it. Now I need a few more details",
+            "Thanks for that information. Could you also provide answers to",
+            "Understood. I still need answers to the following questions",
+            "Good, thank you. Please also answer",
+            "I appreciate that. Moving forward, I need responses to",
+            "Noted. To complete the ticket, please answer",
+            "Thank you. I still need information on",
+            "Perfect. A couple more questions remain"
+        ]
+        intro = random.choice(intro_options)
+        
+        bot_response_parts = [intro]
+        bot_response_parts.append("")
+        
+        # Add remaining questions with their indices
         for q in unanswered_questions:
             bot_response_parts.append(f"{q.index}. {q.question}")
-    else:
-        bot_response_parts.append("\nThank you! I have gathered all the necessary information.")
-    
-    bot_response = "\n".join(bot_response_parts)
+        
+        if all_answered:
+            bot_response_parts.append("\nThank you! I have gathered all the necessary information.")
+        
+        bot_response = "\n".join(bot_response_parts)
     
     # Convert questions back to dicts
     questions_dicts = [q.to_dict() for q in questions]
@@ -466,6 +585,7 @@ Analyze the user's message and identify which questions they are answering. Retu
     updated_state["questions"] = questions_dicts
     updated_state["questioning"] = not all_answered  # Set to False when all answered
     updated_state["bot_response"] = bot_response
+    updated_state["first_question_run_complete"] = first_question_run_complete
     
     # Update conversation history (only add bot response, user_input already added by detect_intent)
     # Check if the last message in history is already the user_input to avoid duplicates
@@ -541,7 +661,8 @@ def main():
         "bot_response": None,
         "known_problem_identified": False,
         "questioning": False,
-        "questions": []
+        "questions": [],
+        "first_question_run_complete": False
     }
     
     while True:
@@ -567,7 +688,8 @@ def main():
                 "bot_response": None,
                 "known_problem_identified": global_state.get("known_problem_identified", False),
                 "questioning": global_state.get("questioning", False),
-                "questions": global_state.get("questions", [])
+                "questions": global_state.get("questions", []),
+                "first_question_run_complete": global_state.get("first_question_run_complete", False)
             }
             
             # Preserve matched_template if it exists
@@ -585,7 +707,8 @@ def main():
                 "bot_response": result.get("bot_response"),
                 "known_problem_identified": result.get("known_problem_identified", False),
                 "questioning": result.get("questioning", False),
-                "questions": result.get("questions", [])
+                "questions": result.get("questions", []),
+                "first_question_run_complete": result.get("first_question_run_complete", False)
             })
             
             # Preserve matched_template if it exists

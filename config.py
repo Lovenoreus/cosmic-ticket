@@ -21,7 +21,7 @@ OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
 
 # Qdrant search configuration
 QDRANT_RESULT_LIMIT = int(os.getenv("QDRANT_RESULT_LIMIT", "5"))
-QDRANT_MIN_SCORE = float(os.getenv("QDRANT_MIN_SCORE", "0.6"))
+QDRANT_MIN_SCORE = float(os.getenv("QDRANT_MIN_SCORE", "0.4"))
 
 # Chunk ingestion configuration
 INGEST_JSON_PATH = os.getenv("INGEST_JSON_PATH", 'data/cosmic_chunks')  # Path to JSON chunks file or directory, None uses default

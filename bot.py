@@ -100,8 +100,12 @@ def detect_intent(state: AgentState) -> AgentState:
 
 Return ONLY a valid JSON object with one of these three structures:
 - If the user is mentioning a problem or asking a question: {{"mode": "cosmic_search"}}
-- If the user is talking about creating a support ticket: {{"mode": "ticket_creation"}}
-- If the user wants to complete/finish/create the ticket now (even if not all questions answered): {{"mode": "create_ticket"}}
+- If the user wants to START creating a support ticket (will ask questions first): {{"mode": "start_ticket"}}
+- If the user wants to COMPLETE/FINISH creating the ticket NOW (skip questions, create immediately): {{"mode": "create_ticket"}}
+
+CRITICAL DISTINCTION:
+- "start_ticket" = User wants to BEGIN the ticket creation process. The system will ask questions to gather information.
+- "create_ticket" = User wants to FINISH/COMPLETE the ticket creation RIGHT NOW, skipping any remaining questions.
 
 Examples:
 - "My printer is broken" -> {{"mode": "cosmic_search"}}
@@ -109,15 +113,20 @@ Examples:
 - "How does <something> work?" -> {{"mode": "cosmic_search"}}
 - "How do I do <something>?" -> {{"mode": "cosmic_search"}}
 - "Why can't I<something>?" -> {{"mode": "cosmic_search"}}
-- "I want to create a ticket" -> {{"mode": "ticket_creation"}}
-- "Can you help me file a support request?" -> {{"mode": "ticket_creation"}}
+- "I want to create a ticket" -> {{"mode": "start_ticket"}}
+- "Can you help me file a support request?" -> {{"mode": "start_ticket"}}
+- "Create a ticket for this problem" -> {{"mode": "start_ticket"}}
+- "Create ticket from this problem" -> {{"mode": "start_ticket"}}
+- "File a ticket" -> {{"mode": "start_ticket"}}
+- "Start ticket creation" -> {{"mode": "start_ticket"}}
+- "Proceed with ticket creation" -> {{"mode": "start_ticket"}}
 - "Complete the ticket now" -> {{"mode": "create_ticket"}}
 - "Finish the ticket" -> {{"mode": "create_ticket"}}
 - "Create the ticket anyway" -> {{"mode": "create_ticket"}}
 - "Skip remaining questions and create ticket" -> {{"mode": "create_ticket"}}
 - "That's enough, create the ticket" -> {{"mode": "create_ticket"}}
 - "Just create it" -> {{"mode": "create_ticket"}}
-- "Proceed with ticket creation" -> {{"mode": "create_ticket"}}
+- "No more questions, create it now" -> {{"mode": "create_ticket"}}
 
 Consider the conversation history when determining intent. If the user is continuing a previous conversation, use context to make the best decision.
 
@@ -902,7 +911,7 @@ def route_after_intent(state: AgentState) -> str:
         return "questioner_agent"
     elif mode == "cosmic_search":
         return "cosmic_search_agent"
-    elif mode == "ticket_creation":
+    elif mode == "start_ticket":
         return "identify_known_question_agent"
     else:
         return END
@@ -1029,7 +1038,7 @@ def main():
             if bot_response:
                 print(f"Bot: {bot_response} ({response_time:.3f}s)\n")
             else:
-                # Fallback if no agent set a response (e.g., ticket_creation mode)
+                # Fallback if no agent set a response (e.g., start_ticket mode)
                 intent = result.get("intent", {})
                 print(f"Bot: {json.dumps(intent)} ({response_time:.3f}s)\n")
             

@@ -5,6 +5,8 @@ from typing import Optional, Dict, Any, List
 import os
 import uuid
 from contextlib import asynccontextmanager
+import asyncio
+from concurrent.futures import ThreadPoolExecutor
 
 # -------------------- External Libraries --------------------
 import uvicorn
@@ -12,24 +14,16 @@ from dotenv import load_dotenv, find_dotenv
 from fastapi import FastAPI, HTTPException, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 
-# -------------------- LangGraph Dependencies --------------------
-from langchain_openai import ChatOpenAI
-from langgraph.graph import StateGraph, END
-from langchain_core.messages import HumanMessage, SystemMessage, AIMessage, BaseMessage
+# -------------------- User-defined Modules --------------------
 import sys
 from pathlib import Path
-from dataclasses import dataclass
-from typing import TypedDict
 
-# -------------------- User-defined Modules --------------------
-sys.path.insert(0, str(Path(__file__).parent / "tools"))
-from tools.vector_database_tools import cosmic_database_tool2
-import config
-from utils import parse_json_from_response
+# Import bot functionality
+from bot import process_message, reset_conversation
 
 load_dotenv(find_dotenv())
 
-DEBUG = config.DEBUG if hasattr(config, 'DEBUG') else False
+DEBUG = os.getenv("DEBUG", "false").lower() == "true"
 
 # ============================================================================
 # PYDANTIC MODELS FOR MCP
@@ -64,275 +58,11 @@ class MCPToolCallResponse(BaseModel):
 
 
 # ============================================================================
-# LANGGRAPH STATE AND DATACLASSES
-# ============================================================================
-
-@dataclass
-class Question:
-    """Represents a question in the ticket creation process"""
-    question: str
-    index: int
-    answered: bool
-    answer: Optional[str]
-
-    def to_dict(self) -> Dict[str, Any]:
-        return {
-            "question": self.question,
-            "index": self.index,
-            "answered": self.answered,
-            "answer": self.answer
-        }
-
-    @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> 'Question':
-        return cls(
-            question=data.get("question", ""),
-            index=data.get("index", 0),
-            answered=data.get("answered", False),
-            answer=data.get("answer", None)
-        )
-
-
-class AgentState(TypedDict):
-    user_input: str
-    intent: dict
-    conversation_history: List[BaseMessage]
-    last_cosmic_query: Optional[str]
-    last_cosmic_query_response: Optional[str]
-    bot_response: Optional[str]
-    known_problem_identified: bool
-    questioning: bool
-    questions: List[Dict[str, Any]]
-    first_question_run_complete: bool
-
-
-# ============================================================================
 # GLOBAL VARIABLES
 # ============================================================================
 
-llm: ChatOpenAI = None
-workflow_app = None
-sessions: Dict[str, Dict[str, Any]] = {}
-KNOWN_QUESTIONS = []
-
-
-# ============================================================================
-# LANGGRAPH AGENTS (same as your original code)
-# ============================================================================
-
-def detect_intent(state: AgentState) -> AgentState:
-    """Detect user intent from input"""
-    user_input = state["user_input"]
-    conversation_history = state.get("conversation_history", [])
-    questioning = state.get("questioning", False)
-
-    if questioning:
-        return {"intent": {"mode": "questioning"}, "conversation_history": conversation_history}
-
-    system_prompt = """You are an intent detection agent. Analyze the user's message and determine their intent based on the conversation history.
-
-Return ONLY a valid JSON object with one of these two structures:
-- If the user is mentioning a problem or asking a question: {"mode": "cosmic_search"}
-- If the user is talking about creating a support ticket: {"mode": "ticket_creation"}
-
-Examples:
-- "My printer is broken" -> {"mode": "cosmic_search"}
-- "I need help with login" -> {"mode": "cosmic_search"}
-- "How does <something> work?" -> {"mode": "cosmic_search"}
-- "I want to create a ticket" -> {"mode": "ticket_creation"}
-
-Return ONLY the JSON, nothing else."""
-
-    messages = [SystemMessage(content=system_prompt)]
-    messages.extend(conversation_history)
-    messages.append(HumanMessage(content=user_input))
-
-    response = llm.invoke(messages)
-    response_text = response.content.strip()
-    intent = parse_json_from_response(response_text)
-
-    updated_history = conversation_history + [
-        HumanMessage(content=user_input),
-        AIMessage(content=json.dumps(intent))
-    ]
-
-    return {"intent": intent, "conversation_history": updated_history}
-
-
-async def cosmic_search_agent(state: AgentState) -> AgentState:
-    """Cosmic search agent that handles cosmic_search mode"""
-    user_input = state.get("user_input", "")
-    last_cosmic_query = user_input
-
-    tool_result = await cosmic_database_tool2(
-        query=last_cosmic_query,
-        collection_name=config.COSMIC_DATABASE_COLLECTION_NAME,
-        limit=config.QDRANT_RESULT_LIMIT,
-        min_score=config.QDRANT_MIN_SCORE
-    )
-
-    last_cosmic_query_response = json.dumps(tool_result, indent=2)
-    bot_response = tool_result.get("message", "")
-
-    if not bot_response:
-        bot_response = 'I am sorry, I could not find any information on that topic.'
-
-    updated_state = dict(state)
-    updated_state["last_cosmic_query"] = last_cosmic_query
-    updated_state["last_cosmic_query_response"] = last_cosmic_query_response
-    updated_state["bot_response"] = bot_response
-
-    return updated_state
-
-
-def identify_known_question_agent(state: AgentState) -> AgentState:
-    """Identify the most appropriate problem template from known_questions.json"""
-    user_problem = state.get("last_cosmic_query", "") or state.get("user_input", "")
-
-    if not user_problem:
-        return {"known_problem_identified": False}
-
-    templates_summary = []
-    for idx, template in enumerate(KNOWN_QUESTIONS):
-        template_info = {
-            "index": idx,
-            "issue_category": template.get("issue_category", ""),
-            "description": template.get("description", ""),
-            "keywords": template.get("keywords", []),
-            "queue": template.get("queue", ""),
-            "urgency_level": template.get("urgency_level", ""),
-            "text": template.get("text", "")
-        }
-        templates_summary.append(template_info)
-
-    system_prompt = """You are a problem classification agent. Match a user's problem to the most appropriate template.
-
-Return format:
-{
-  "matched_index": <integer index>,
-  "confidence": <float 0.0-1.0>,
-  "reasoning": "<brief explanation>"
-}
-
-If no good match (confidence < 0.5), return matched_index: -1"""
-
-    templates_text = json.dumps(templates_summary, indent=2)
-    user_prompt = f"""User Problem: {user_problem}
-
-Available Templates: {templates_text}
-
-Return ONLY the JSON response."""
-
-    messages = [
-        SystemMessage(content=system_prompt),
-        HumanMessage(content=user_prompt)
-    ]
-
-    response = llm.invoke(messages)
-    response_text = response.content.strip()
-
-    try:
-        match_result = parse_json_from_response(response_text, default={"matched_index": -1, "confidence": 0.0})
-        matched_index = match_result.get("matched_index", -1)
-        confidence = match_result.get("confidence", 0.0)
-
-        if matched_index >= 0 and matched_index < len(KNOWN_QUESTIONS) and confidence >= 0.5:
-            matched_template = KNOWN_QUESTIONS[matched_index]
-            questions_to_ask = matched_template.get("questions_to_ask", [])
-            questions = [
-                Question(
-                    question=q,
-                    index=idx,
-                    answered=False,
-                    answer=None
-                ).to_dict()
-                for idx, q in enumerate(questions_to_ask, start=1)
-            ]
-
-            updated_state = dict(state)
-            updated_state["known_problem_identified"] = True
-            updated_state["matched_template"] = matched_template
-            updated_state["match_confidence"] = confidence
-            updated_state["questions"] = questions
-            updated_state["questioning"] = True
-            return updated_state
-        else:
-            updated_state = dict(state)
-            updated_state["known_problem_identified"] = False
-            updated_state["match_confidence"] = confidence
-            return updated_state
-    except Exception as e:
-        updated_state = dict(state)
-        updated_state["known_problem_identified"] = False
-        updated_state["match_error"] = str(e)
-        return updated_state
-
-
-def questioner_agent(state: AgentState) -> AgentState:
-    """Questioner agent that gathers answers for ticket creation"""
-    questions_data = state.get("questions", [])
-    user_input = state.get("user_input", "")
-    conversation_history = state.get("conversation_history", [])
-    first_question_run_complete = state.get("first_question_run_complete", False)
-
-    if not questions_data:
-        updated_state = dict(state)
-        updated_state["bot_response"] = "Error: No questions initialized."
-        updated_state["questioning"] = False
-        return updated_state
-
-    questions = [Question.from_dict(q) for q in questions_data]
-
-    # Extract answers from user input (simplified version - you can expand this)
-    if user_input:
-        # Simple logic: mark first unanswered question as answered
-        for q in questions:
-            if not q.answered:
-                q.answered = True
-                q.answer = user_input
-                break
-
-    all_answered = all(q.answered for q in questions)
-    unanswered_questions = [q for q in questions if not q.answered]
-
-    if not first_question_run_complete:
-        bot_response = "I need to gather some information:\n\n"
-        for q in questions:
-            bot_response += f"{q.index}. {q.question}\n"
-        first_question_run_complete = True
-    else:
-        if all_answered:
-            bot_response = "Thank you! I have all the information needed."
-        else:
-            bot_response = "Please answer:\n\n"
-            for q in unanswered_questions:
-                bot_response += f"{q.index}. {q.question}\n"
-
-    questions_dicts = [q.to_dict() for q in questions]
-
-    updated_state = dict(state)
-    updated_state["questions"] = questions_dicts
-    updated_state["questioning"] = not all_answered
-    updated_state["bot_response"] = bot_response
-    updated_state["first_question_run_complete"] = first_question_run_complete
-
-    return updated_state
-
-
-def route_after_intent(state: AgentState) -> str:
-    """Route to appropriate agent based on detected intent"""
-    intent = state.get("intent", {})
-    mode = intent.get("mode", "cosmic_search")
-    questioning = state.get("questioning", False)
-
-    if questioning or mode == "questioning":
-        return "questioner_agent"
-    elif mode == "cosmic_search":
-        return "cosmic_search_agent"
-    elif mode == "ticket_creation":
-        return "identify_known_question_agent"
-    else:
-        return END
+# Thread pool executor for running sync bot functions in async context
+executor = ThreadPoolExecutor(max_workers=10)
 
 
 # ============================================================================
@@ -341,64 +71,11 @@ def route_after_intent(state: AgentState) -> str:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Initialize chatbot components before app starts"""
-    global llm, workflow_app, KNOWN_QUESTIONS
-
+    """Initialize server components"""
     print("=" * 80)
     print("INITIALIZING COSMIC CHATBOT MCP SERVER")
     print("=" * 80)
-
-    # Initialize LLM
-    print("[STARTUP] Initializing LLM...")
-    llm = ChatOpenAI(
-        model=os.getenv("AGENT_MODEL_NAME", "gpt-4o-mini"),
-        temperature=0
-    )
-
-    # Load known questions
-    print("[STARTUP] Loading known questions...")
-    KNOWN_QUESTIONS_PATH = Path(__file__).parent / "known_questions.json"
-    if KNOWN_QUESTIONS_PATH.exists():
-        with open(KNOWN_QUESTIONS_PATH, "r", encoding="utf8") as f:
-            KNOWN_QUESTIONS = json.load(f)
-        print(f"[STARTUP] Loaded {len(KNOWN_QUESTIONS)} known question templates")
-    else:
-        print("[STARTUP] Warning: known_questions.json not found")
-        KNOWN_QUESTIONS = []
-
-    # Build LangGraph workflow
-    print("[STARTUP] Building LangGraph workflow...")
-    workflow = StateGraph(AgentState)
-    workflow.add_node("detect_intent", detect_intent)
-    workflow.add_node("cosmic_search_agent", cosmic_search_agent)
-    workflow.add_node("identify_known_question_agent", identify_known_question_agent)
-    workflow.add_node("questioner_agent", questioner_agent)
-
-    workflow.set_entry_point("detect_intent")
-    workflow.add_conditional_edges(
-        "detect_intent",
-        route_after_intent,
-        {
-            "cosmic_search_agent": "cosmic_search_agent",
-            "identify_known_question_agent": "identify_known_question_agent",
-            "questioner_agent": "questioner_agent",
-            END: END
-        }
-    )
-    workflow.add_edge("cosmic_search_agent", END)
-    workflow.add_conditional_edges(
-        "identify_known_question_agent",
-        lambda state: "questioner_agent" if state.get("questioning", False) else END,
-        {
-            "questioner_agent": "questioner_agent",
-            END: END
-        }
-    )
-    workflow.add_edge("questioner_agent", END)
-
-    workflow_app = workflow.compile()
-    print("[STARTUP] LangGraph workflow compiled successfully")
-
+    print("[STARTUP] Bot functionality loaded from bot.py")
     print("=" * 80)
     print("COSMIC CHATBOT MCP SERVER READY")
     print("=" * 80)
@@ -432,22 +109,14 @@ app.add_middleware(
 # HELPER FUNCTIONS
 # ============================================================================
 
-def get_or_create_session(session_id: Optional[str] = None) -> tuple[str, Dict[str, Any]]:
-    """Get existing session or create a new one"""
-    if session_id and session_id in sessions:
-        return session_id, sessions[session_id]
-
-    new_session_id = session_id or str(uuid.uuid4())
-    sessions[new_session_id] = {
-        "conversation_history": [],
-        "last_cosmic_query": None,
-        "last_cosmic_query_response": None,
-        "known_problem_identified": False,
-        "questioning": False,
-        "questions": [],
-        "first_question_run_complete": False
-    }
-    return new_session_id, sessions[new_session_id]
+async def process_bot_message_async(chat_id: str, user_message: str) -> dict:
+    """
+    Async wrapper for process_message from bot.py
+    Runs the sync function in a thread pool executor
+    """
+    loop = asyncio.get_event_loop()
+    result = await loop.run_in_executor(executor, process_message, chat_id, user_message)
+    return result
 
 
 # ============================================================================
@@ -465,32 +134,43 @@ async def mcp_tools_list(request: Request):
 
     all_tools = [
         MCPTool(
-            name="cosmic_chat",
-            description="""
-                TRIGGER: Any user question or support request
-
-                ACTIONS:
-                - Searches cosmic knowledge base for relevant information
-                - Identifies known problems and initiates ticket creation workflow
-                - Gathers required information through conversational questions
-
-                SCOPE: IT support, troubleshooting, and ticket management
-
-                RETURNS: Contextual response with relevant information or follow-up questions
-            """,
+            name="support_ticket_bot",
+            description=(
+                "SCOPE: Use this tool for natural conversation-based support ticket creation. This is an intelligent conversational bot that guides users through creating support tickets by asking relevant questions based on the issue type.\n\n"
+                "TRIGGER: User wants to have a conversation about an issue, needs help creating a ticket through natural dialogue, wants to report a problem through chat\n\n"
+                "ACTION: Engages in a natural conversation with the user to:\n"
+                "  1. Understand the problem through dialogue\n"
+                "  2. Automatically identify the issue category from known categories\n"
+                "  3. Ask relevant diagnostic questions based on the issue type\n"
+                "  4. Collect all necessary information through conversation\n"
+                "  5. Create both JSON and Jira tickets when all information is collected\n\n"
+                "FEATURES:\n"
+                "  - Maintains conversation context across multiple messages\n"
+                "  - Automatically switches from normal chat to ticket mode when an issue is detected\n"
+                "  - Searches cosmic knowledge base for relevant information\n"
+                "  - Asks questions in batches, preserving original question indices\n"
+                "  - Handles corrections and updates gracefully\n"
+                "  - Creates tickets automatically when all questions are answered\n\n"
+                "USE CASES:\n"
+                "  - User says 'I have a problem with...' - start conversation\n"
+                "  - User wants to report an issue through natural conversation\n"
+                "  - User needs guidance on what information to provide\n"
+                "  - User wants to create a ticket but doesn't know all details upfront\n\n"
+                "RETURNS: Assistant's conversational response, current ticket state, and status information"
+            ),
             inputSchema={
                 "type": "object",
                 "properties": {
-                    "user_input": {
+                    "user_message": {
                         "type": "string",
-                        "description": "User's question or support request"
+                        "description": "The user's message in the conversation (REQUIRED)"
                     },
-                    "session_id": {
+                    "chat_id": {
                         "type": "string",
-                        "description": "Optional session ID to maintain conversation context"
+                        "description": "Conversation ID to maintain context across messages (REQUIRED)"
                     }
                 },
-                "required": ["user_input"]
+                "required": ["user_message", "chat_id"]
             }
         )
     ]
@@ -507,76 +187,50 @@ async def mcp_tools_call(request: MCPToolCallRequest):
     """MCP Protocol: Call a specific tool"""
     try:
         tool_name = request.name
-        arguments = request.arguments
+        arguments = request.arguments or {}
 
         if DEBUG:
             print(f"[MCP] Calling tool: {tool_name} with args: {arguments}")
 
-        if tool_name == "cosmic_chat":
-            user_input = arguments.get("user_input", "")
-            # session_id = arguments.get("session_id", None)
-            # TODO: Overwrote the dynamic session id that is meant to be collected from the frontend and used with a
-            #  static session id.
-            session_id = "6aca3d3f-9b36-4f20-93d1-46cc22e16e34"
+        if tool_name == "support_ticket_bot":
+            user_message = arguments.get("user_message", "")
+            chat_id = arguments.get("chat_id", "")
 
-            if not user_input:
+            if not user_message:
                 return MCPToolCallResponse(
-                    content=[MCPContent(type="text", text="Error: user_input is required")],
+                    content=[MCPContent(
+                        type="text",
+                        text=json.dumps({
+                            "success": False,
+                            "error": "user_message is required",
+                            "message": "Please provide the user's message to process"
+                        }, indent=2)
+                    )],
                     isError=True
                 )
 
-            # Get or create session
-            session_id, session_state = get_or_create_session(session_id)
+            if not chat_id:
+                return MCPToolCallResponse(
+                    content=[MCPContent(
+                        type="text",
+                        text=json.dumps({
+                            "success": False,
+                            "error": "chat_id is required",
+                            "message": "Please provide the conversation_id to maintain context"
+                        }, indent=2)
+                    )],
+                    isError=True
+                )
 
-            # Prepare state
-            current_state = {
-                "user_input": user_input,
-                "conversation_history": session_state.get("conversation_history", []),
-                "last_cosmic_query": session_state.get("last_cosmic_query"),
-                "last_cosmic_query_response": session_state.get("last_cosmic_query_response"),
-                "bot_response": None,
-                "known_problem_identified": session_state.get("known_problem_identified", False),
-                "questioning": session_state.get("questioning", False),
-                "questions": session_state.get("questions", []),
-                "first_question_run_complete": session_state.get("first_question_run_complete", False)
-            }
+            # Process message using bot.py's process_message function
+            result = await process_bot_message_async(chat_id, user_message)
 
-            if "matched_template" in session_state:
-                current_state["matched_template"] = session_state["matched_template"]
-
-            # Run workflow
-            result = await workflow_app.ainvoke(current_state)
-
-            # Update session
-            sessions[session_id] = {
-                "conversation_history": result.get("conversation_history", []),
-                "last_cosmic_query": result.get("last_cosmic_query"),
-                "last_cosmic_query_response": result.get("last_cosmic_query_response"),
-                "known_problem_identified": result.get("known_problem_identified", False),
-                "questioning": result.get("questioning", False),
-                "questions": result.get("questions", []),
-                "first_question_run_complete": result.get("first_question_run_complete", False)
-            }
-
-            if "matched_template" in result:
-                sessions[session_id]["matched_template"] = result["matched_template"]
-
-            # Prepare response
-            response_data = {
-                "bot_response": result.get("bot_response", "I'm not sure how to respond."),
-                "session_id": session_id,
-                "intent": result.get("intent"),
-                "questioning": result.get("questioning", False),
-                "questions": result.get("questions"),
-                "metadata": {
-                    "matched_template": result.get("matched_template", {}).get("issue_category") if result.get(
-                        "matched_template") else None,
-                    "match_confidence": result.get("match_confidence")
-                }
-            }
+            if DEBUG:
+                print(f"[MCP] Bot result: success={result.get('success')}, ticket_mode={result.get('ticket_mode')}, ticket_ready={result.get('ticket_ready')}")
 
             return MCPToolCallResponse(
-                content=[MCPContent(type="text", text=json.dumps(response_data, indent=2))]
+                content=[MCPContent(type="text", text=json.dumps(result, indent=2, ensure_ascii=False))],
+                isError=not result.get("success", False)
             )
 
         else:
@@ -587,10 +241,19 @@ async def mcp_tools_call(request: MCPToolCallRequest):
 
     except Exception as e:
         if DEBUG:
+            import traceback
             print(f"[MCP] Error calling tool {request.name}: {e}")
+            traceback.print_exc()
 
         return MCPToolCallResponse(
-            content=[MCPContent(type="text", text=f"Error: {str(e)}")],
+            content=[MCPContent(
+                type="text",
+                text=json.dumps({
+                    "success": False,
+                    "error": str(e),
+                    "message": "An unexpected error occurred while processing the conversation"
+                }, indent=2)
+            )],
             isError=True
         )
 
@@ -697,10 +360,8 @@ async def health_check():
         "status": "healthy",
         "service": "Cosmic Chatbot MCP Server",
         "timestamp": datetime.now().isoformat(),
-        "llm_initialized": llm is not None,
-        "workflow_initialized": workflow_app is not None,
-        "known_questions_loaded": len(KNOWN_QUESTIONS),
-        "active_sessions": len(sessions)
+        "bot_loaded": True,
+        "mcp_compatible": True
     }
 
 
@@ -711,7 +372,7 @@ async def server_info():
         "service": "Cosmic Chatbot MCP Server",
         "version": "1.0.0",
         "description": "AI-powered support chatbot with cosmic knowledge base and ticket creation",
-        "protocols": ["REST API", "MCP (Model Context Protocol)"],
+        "protocols": ["REST API", "MCP (Model Context Protocol)", "Streamable HTTP"],
         "mcp_endpoints": {
             "streamable_http": "/",
             "tools_list": "/mcp/tools/list",
@@ -722,21 +383,27 @@ async def server_info():
             "Intelligent Problem Classification",
             "Automated Ticket Creation Workflow",
             "Conversational Question Gathering",
-            "Session Management",
+            "Jira Ticket Integration",
+            "JSON Ticket Storage",
+            "Session Management via chat_id",
             "MCP Protocol Support"
         ],
-        "tools": ["cosmic_chat"],
+        "tools": ["support_ticket_bot"],
         "mcp_compatible": True
     }
 
 
-@app.delete("/session/{session_id}")
-async def delete_session(session_id: str):
-    """Delete a session"""
-    if session_id in sessions:
-        del sessions[session_id]
-        return {"message": f"Session {session_id} deleted"}
-    raise HTTPException(status_code=404, detail="Session not found")
+@app.delete("/session/{chat_id}")
+async def delete_session(chat_id: str):
+    """Reset a conversation session"""
+    try:
+        success = reset_conversation(chat_id)
+        if success:
+            return {"message": f"Session {chat_id} reset successfully"}
+        else:
+            raise HTTPException(status_code=404, detail="Session not found")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error resetting session: {str(e)}")
 
 
 @app.get("/")

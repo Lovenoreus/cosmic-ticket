@@ -1,752 +1,750 @@
 [
-    {
-      "source_file": "hospital_support_questions.json",
-      "section": "Facilities and Fixtures",
-      "page": 1,
-      "section_id": "1.1",
-      "main_section_id": "1",
-      "context_summary": "Information gathering protocol for facility fixture malfunctions including faucets, toilets, lighting, doors, and general infrastructure problems affecting daily operations",
-      "keywords": [
-        "facilities",
-        "fixtures",
-        "faucets",
-        "toilets",
-        "sinks",
-        "light bulbs",
-        "ceiling tiles",
-        "doors",
-        "leaks",
-        "broken handles",
-        "lighting problems",
-        "water pressure",
-        "maintenance department",
-        "plumbing",
-        "electrical fixtures"
-      ],
-      "content_type": "support_protocol",
-      "hierarchical_tags": [
-        "Maintenance",
-        "Facilities",
-        "Infrastructure",
-        "Physical Systems"
-      ],
-      "clinical_domain": [
-        "Hospital Operations",
-        "Facility Management"
-      ],
-      "queue": "Maintenance Department",
-      "issue_category": "Facilities or Fixtures malfunction",
-      "urgency_level": "medium",
-      "description": "Covers problems related to physical facility fixtures such as faucets, toilets, sinks, light bulbs, ceiling tiles, trash cans, bed remotes, doors, and paint. This includes leaks, missing or broken items, control malfunctions, non-functional lighting, poor water pressure, and deteriorating finishes.",
-      "questions_to_ask": [
-        "Which specific room or area is affected by this issue?",
-        "When did you first notice the problem?",
-        "Is anyone's care or work being significantly affected by this issue?",
-        "Have you noticed any changes in the issue either worsening or improving since it began?",
-        "Are there any visible signs of damage, leaking, or unusual odors?"
-      ],
-      "text": "Facilities or fixtures malfunction protocol for Maintenance Department. Covers problems with faucets, toilets, sinks, light bulbs, ceiling tiles, doors, paint, leaks, broken handles, lighting issues, and water pressure problems. Essential questions: specific room or area affected, timeline of problem onset, impact on care or work, progression of issue, and visible damage or odors."
-    },
-    {
-      "source_file": "hospital_support_questions.json",
-      "section": "Facilities and Fixtures",
-      "page": 1,
-      "section_id": "1.2",
-      "main_section_id": "1",
-      "context_summary": "Information gathering protocol for HVAC and climate control issues including temperature problems, air quality concerns, and ventilation system malfunctions",
-      "keywords": [
-        "HVAC",
-        "air conditioning",
-        "heating",
-        "temperature",
-        "too hot",
-        "too cold",
-        "air quality",
-        "ventilation",
-        "climate control",
-        "thermostat",
-        "air flow",
-        "humidity",
-        "stuffy air"
-      ],
-      "content_type": "support_protocol",
-      "hierarchical_tags": [
-        "Maintenance",
-        "HVAC",
-        "Climate Control",
-        "Environmental Systems"
-      ],
-      "clinical_domain": [
-        "Hospital Operations",
-        "Environmental Services"
-      ],
-      "queue": "Maintenance Department",
-      "issue_category": "HVAC and climate control issues",
-      "urgency_level": "medium",
-      "description": "Covers heating, ventilation, and air conditioning problems including temperature control issues, poor air quality, inadequate airflow, humidity problems, and thermostat malfunctions affecting patient and staff comfort.",
-      "questions_to_ask": [
-        "What is the current temperature in the affected area?",
-        "Is the issue with heating, cooling, or air circulation?",
-        "How long has the temperature been uncomfortable?",
-        "Are multiple rooms affected or just this specific area?",
-        "Have you noticed any unusual sounds from vents or HVAC equipment?"
-      ],
-      "text": "HVAC and climate control issue protocol for Maintenance Department. Covers heating, cooling, ventilation problems, temperature control issues, poor air quality, inadequate airflow, and humidity problems. Essential questions: current temperature, type of climate issue, duration of problem, scope of affected areas, and unusual HVAC sounds."
-    },
-    {
-      "source_file": "hospital_support_questions.json",
-      "section": "Medical Equipment",
-      "page": 2,
-      "section_id": "2.1",
-      "main_section_id": "2",
-      "context_summary": "Information gathering protocol for general medical equipment malfunctions including beds, lifts, monitors, and patient care devices affecting clinical operations",
-      "keywords": [
-        "medical equipment",
-        "patient beds",
-        "adjustable beds",
-        "lifts",
-        "exam chairs",
-        "monitors",
-        "remotes",
-        "bed controls",
-        "patient lifts",
-        "medical devices",
-        "equipment malfunction",
-        "broken equipment"
-      ],
-      "content_type": "support_protocol",
-      "hierarchical_tags": [
-        "Medical Equipment",
-        "Patient Care",
-        "Clinical Devices",
-        "Healthcare Technology"
-      ],
-      "clinical_domain": [
-        "Patient Care",
-        "Clinical Operations"
-      ],
-      "queue": "Technical Support",
-      "issue_category": "Medical equipment malfunction",
-      "urgency_level": "high",
-      "description": "Covers malfunctioning medical or patient-use equipment, including adjustable beds, lifts, exam chairs, oxygen flow meters, monitors, and remotes. Typical issues include unresponsive controls, electrical faults, physical damage, broken parts, or intermittent behavior.",
-      "questions_to_ask": [
-        "Do you know the exact model and serial number of the equipment?",
-        "What specific symptoms or errors is the equipment displaying?",
-        "Is any patient care being delayed or compromised due to this issue?",
-        "When was the equipment last functioning correctly?",
-        "Has the equipment been moved recently or experienced any physical impact?"
-      ],
-      "text": "Medical equipment malfunction protocol for Technical Support. Covers adjustable beds, lifts, exam chairs, monitors, remotes, oxygen flow meters with unresponsive controls, electrical faults, physical damage, or broken parts. Essential questions: model and serial number, specific symptoms or errors, patient care impact, timeline of last normal function, and recent movement or physical impact."
-    },
-    {
-      "source_file": "hospital_support_questions.json",
-      "section": "Medical Equipment",
-      "page": 2,
-      "section_id": "2.2",
-      "main_section_id": "2",
-      "context_summary": "Information gathering protocol for IV pumps and infusion device malfunctions affecting medication delivery and patient safety",
-      "keywords": [
-        "IV pump",
-        "infusion pump",
-        "medication delivery",
-        "pump malfunction",
-        "IV equipment",
-        "infusion device",
-        "pump error",
-        "medication pump",
-        "drip pump",
-        "syringe pump",
-        "pump alarm"
-      ],
-      "content_type": "support_protocol",
-      "hierarchical_tags": [
-        "Medical Equipment",
-        "IV Therapy",
-        "Medication Delivery",
-        "Critical Care Equipment"
-      ],
-      "clinical_domain": [
-        "Patient Care",
-        "Medication Management",
-        "Critical Care"
-      ],
-      "queue": "Technical Support",
-      "issue_category": "IV pump and infusion device malfunction",
-      "urgency_level": "high",
-      "description": "Covers IV pumps, infusion pumps, syringe pumps, and other medication delivery devices experiencing malfunctions, error messages, alarm conditions, or delivery inaccuracies that could impact patient safety and medication administration.",
-      "questions_to_ask": [
-        "What is the make, model, and asset number of the IV pump?",
-        "What error messages or alarms is the pump displaying?",
-        "Is the pump currently connected to a patient?",
-        "What medication or fluid was being infused when the problem occurred?",
-        "Has the pump been dropped or experienced any physical trauma recently?"
-      ],
-      "text": "IV pump and infusion device malfunction protocol for Technical Support. Covers IV pumps, syringe pumps, medication delivery devices with error messages, alarms, or delivery inaccuracies affecting patient safety. Essential questions: make, model, and asset number, error messages or alarms, patient connection status, medication being infused, and recent physical trauma."
-    },
-    {
-      "source_file": "hospital_support_questions.json",
-      "section": "Environmental and Structural",
-      "page": 3,
-      "section_id": "3.1",
-      "main_section_id": "3",
-      "context_summary": "Information gathering protocol for building infrastructure and environmental concerns including structural issues, leaks, pest activity, and air quality problems",
-      "keywords": [
-        "environmental issues",
-        "structural problems",
-        "strange noises",
-        "ceiling leaks",
-        "pest activity",
-        "wall damage",
-        "strong odors",
-        "mold smells",
-        "cracking walls",
-        "air pressure",
-        "pest droppings",
-        "water damage"
-      ],
-      "content_type": "support_protocol",
-      "hierarchical_tags": [
-        "Maintenance",
-        "Environmental Services",
-        "Building Infrastructure",
-        "Safety"
-      ],
-      "clinical_domain": [
-        "Hospital Operations",
-        "Environmental Safety"
-      ],
-      "queue": "Maintenance Department",
-      "issue_category": "Environmental or structural issue",
-      "urgency_level": "medium",
-      "description": "Covers building infrastructure and environmental concerns including strange noises, temperature control, ceiling leaks, pest activity, wall damage, or strong odors. Common signs include noises from HVAC or ceilings, mold smells, cracking walls, air pressure issues, or pest droppings.",
-      "questions_to_ask": [
-        "Can you describe the exact location and nature of what you're observing?",
-        "Are there any changes in temperature, humidity, or air quality associated with this issue?",
-        "Has there been any recent construction, weather events, or other changes that might be related?",
-        "Have you noticed the issue getting worse over time or spreading to other areas?",
-        "Are any patients or staff reporting symptoms that could be related to this issue?"
-      ],
-      "text": "Environmental or structural issue protocol for Maintenance Department. Covers strange noises, ceiling leaks, pest activity, wall damage, strong odors, mold smells, cracking walls, and air pressure issues. Essential questions: exact location and nature of observation, temperature or air quality changes, recent construction or weather events, progression or spread of issue, and related patient or staff symptoms."
-    },
-    {
-      "source_file": "hospital_support_questions.json",
-      "section": "IT and Device Issues",
-      "page": 4,
-      "section_id": "4.1",
-      "main_section_id": "4",
-      "context_summary": "Information gathering protocol for hospital communication and IT equipment including phones, computers, printers, monitors, and connectivity issues",
-      "keywords": [
-        "IT issues",
-        "device malfunction",
-        "phones",
-        "computers",
-        "printers",
-        "monitors",
-        "internet",
-        "connectivity",
-        "charging failure",
-        "screen blackouts",
-        "login problems",
-        "device not powering",
-        "network issues"
-      ],
-      "content_type": "support_protocol",
-      "hierarchical_tags": [
-        "IT Support",
-        "Hardware",
-        "Communication Systems",
-        "Network Infrastructure"
-      ],
-      "clinical_domain": [
-        "IT Support",
-        "Hospital Information Systems"
-      ],
-      "queue": "IT Department",
-      "issue_category": "IT or device malfunction",
-      "urgency_level": "high",
-      "description": "Covers problems with hospital communication and IT equipment including phones, computers, printers, monitors, and internet-connected devices. Issues may include charging failure, screen blackouts, login problems, device not powering on, connectivity interruptions, or peripheral malfunctions.",
-      "questions_to_ask": [
-        "Do you know the device model and asset tag number?",
-        "What specific error messages or behaviors are you experiencing?",
-        "Were there any system updates, power outages, or changes before the issue started?",
-        "Does the issue happen consistently or only under certain conditions?",
-        "How is this affecting your ability to perform your duties or provide patient care?"
-      ],
-      "text": "IT or device malfunction protocol for IT Department. Covers phones, computers, printers, monitors, internet devices with charging failure, screen blackouts, login problems, power issues, or connectivity interruptions. Essential questions: device model and asset tag, specific error messages or behaviors, recent updates or power issues, consistency of problem, and impact on duties or patient care."
-    },
-    {
-      "source_file": "hospital_support_questions.json",
-      "section": "IT and Device Issues",
-      "page": 4,
-      "section_id": "4.2",
-      "main_section_id": "4",
-      "context_summary": "Information gathering protocol for software installation failures, crashes, performance issues, licensing problems, and general software malfunctions affecting hospital systems",
-      "keywords": [
-        "software",
-        "installation",
-        "crashes",
-        "slow performance",
-        "error messages",
-        "licensing problems",
-        "compatibility issues",
-        "update failures",
-        "software malfunctions",
-        "not installed",
-        "won't launch",
-        "corrupted installation",
-        "dependencies",
-        "configuration problems"
-      ],
-      "content_type": "support_protocol",
-      "hierarchical_tags": [
-        "IT Support",
-        "Software",
-        "Applications",
-        "System Support"
-      ],
-      "clinical_domain": [
-        "IT Support",
-        "Hospital Information Systems"
-      ],
-      "queue": "IT Department",
-      "issue_category": "Software installation and functionality issues",
-      "urgency_level": "medium",
-      "description": "Covers issues related to software not being installed, installation failures, software crashes, slow performance, error messages, licensing problems, compatibility issues, update failures, and general software malfunctions. May also include missing software dependencies, corrupted installations, or configuration problems.",
-      "questions_to_ask": [
-        "What specific issue are you experiencing with the software? (e.g., not installed, crashes, slow performance, error messages, won't launch)",
-        "Are there any error codes or alerts being displayed?",
-        "When did the issue first occur?",
-        "What device or platform are you using? (e.g., Windows 10, macOS, specific workstation model)",
-        "Has there been any recent update or change to the software, operating system, or hardware before this issue began?"
-      ],
-      "text": "Software installation and functionality issue protocol for IT Department. Covers software not being installed, installation failures, crashes, slow performance, error messages, licensing problems, compatibility issues, update failures, and general malfunctions. Essential questions: specific software symptoms, error codes or alerts, timeline of issue onset, device and platform details, and recent software or system changes."
-    },
-    {
-      "source_file": "hospital_support_questions.json",
-      "section": "Safety and Security",
-      "page": 5,
-      "section_id": "5.1",
-      "main_section_id": "5",
-      "context_summary": "Information gathering protocol for safety and security incidents where safety may be compromised including broken locks, emergency exits, and hazards",
-      "keywords": [
-        "safety concerns",
-        "security issues",
-        "broken locks",
-        "security doors",
-        "alarms not working",
-        "emergency exits",
-        "tripping hazards",
-        "safety protocols",
-        "security vulnerability",
-        "emergency access",
-        "door locks"
-      ],
-      "content_type": "support_protocol",
-      "hierarchical_tags": [
-        "Security",
-        "Safety",
-        "Emergency Systems",
-        "Access Control"
-      ],
-      "clinical_domain": [
-        "Hospital Security",
-        "Safety Management"
-      ],
-      "queue": "Security Department",
-      "issue_category": "Safety or security concern",
-      "urgency_level": "high",
-      "description": "Covers incidents where safety or security may be compromised. Examples include broken locks, malfunctioning security doors, alarms not working, emergency exits jammed, or tripping hazards in hallways. Prompt action ensures compliance with safety protocols.",
-      "questions_to_ask": [
-        "What specific safety hazard or security vulnerability have you identified?",
-        "Is there an immediate threat to anyone's safety that requires urgent action?",
-        "How many people are potentially affected by this issue?",
-        "Have any temporary measures been put in place to mitigate the risk?",
-        "Has this issue been reported previously or is this the first occurrence?"
-      ],
-      "text": "Safety or security concern protocol for Security Department. Covers broken locks, malfunctioning security doors, non-working alarms, jammed emergency exits, and tripping hazards affecting safety protocols. Essential questions: specific hazard or vulnerability, immediate threat level, number of people affected, temporary mitigation measures, and previous occurrence history."
-    },
-    {
-      "source_file": "hospital_support_questions.json",
-      "section": "Supply and Logistics",
-      "page": 6,
-      "section_id": "6.1",
-      "main_section_id": "6",
-      "context_summary": "Information gathering protocol for supply shortages, missing essential items, and logistics issues affecting hospital operations and patient care",
-      "keywords": [
-        "supply issues",
-        "logistics problems",
-        "missing supplies",
-        "shortage",
-        "trash bins",
-        "medical supplies",
-        "linens",
-        "PPE",
-        "personal protective equipment",
-        "documentation materials",
-        "essential items",
-        "stock out"
-      ],
-      "content_type": "support_protocol",
-      "hierarchical_tags": [
-        "Supply Chain",
-        "Logistics",
-        "Inventory Management",
-        "Patient Care Supplies"
-      ],
-      "clinical_domain": [
-        "Supply Chain Management",
-        "Patient Care Operations"
-      ],
-      "queue": "Logistics Department",
-      "issue_category": "Supply or logistics issue",
-      "urgency_level": "medium",
-      "description": "Covers absence, shortage, or misplacement of essential hospital items such as trash bins, medical supplies, linens, PPE, or documentation materials. Ensures the continuous availability of tools and supplies required for uninterrupted patient care.",
-      "questions_to_ask": [
-        "What specific supplies are needed and in what quantities?",
-        "How urgently are these supplies needed for patient care?",
-        "When was the last time these supplies were available in your area?",
-        "Are there any scheduled procedures or treatments that will be affected without these supplies?",
-        "Is this a one-time shortage or a recurring issue with particular items?"
-      ],
-      "text": "Supply or logistics issue protocol for Logistics Department. Covers absence, shortage, or misplacement of trash bins, medical supplies, linens, PPE, and documentation materials affecting patient care operations. Essential questions: specific supplies and quantities needed, urgency for patient care, last availability timeline, affected procedures or treatments, and frequency of shortage occurrence."
-    },
-    {
-      "source_file": "hospital_support_questions.json",
-      "section": "Radiology Equipment",
-      "page": 7,
-      "section_id": "7.1",
-      "main_section_id": "7",
-      "context_summary": "Information gathering protocol for MRI scanner malfunctions including hardware, software, cooling, and imaging quality issues requiring specialized radiology and maintenance support",
-      "keywords": [
-        "MRI scanner",
-        "MRI",
-        "scanner",
-        "busted",
-        "broken",
-        "malfunctioning",
-        "radiology",
-        "medical imaging",
-        "gradient coil",
-        "RF coil",
-        "cooling system",
-        "patient table",
-        "door interlock",
-        "image artifacts",
-        "abnormal noises",
-        "scanner problems",
-        "imaging equipment",
-        "diagnostic equipment"
-      ],
-      "content_type": "support_protocol",
-      "hierarchical_tags": [
-        "Medical Equipment",
-        "Radiology",
-        "MRI",
-        "Diagnostic Imaging"
-      ],
-      "clinical_domain": [
-        "Radiology",
-        "Medical Imaging",
-        "Diagnostic Services"
-      ],
-      "queue": "2nd line",
-      "issue_category": "MRI scanner issue",
-      "urgency_level": "high",
-      "description": "Covers issues related to MRI scanners including abnormal noises, image artifacts, gradient or RF coil malfunctions, cooling system failures, patient table errors, door interlock problems, power interruptions, and software or firmware glitches.",
-      "questions_to_ask": [
-        "What is the model and serial number of the MRI scanner?",
-        "What specific issue are you experiencing (e.g., noise, image quality, cooling failure)?",
-        "Is patient imaging currently being delayed or canceled due to this problem?",
-        "When was the scanner last used without any issues?",
-        "Have any error codes or system alerts been displayed on the console?"
-      ],
-      "text": "MRI scanner issue protocol for 2nd line. Covers abnormal noises, image artifacts, gradient or RF coil malfunctions, cooling system failures, patient table errors, door interlock problems, power interruptions, and software glitches. Essential questions: model and serial number, specific symptoms like noise or image quality issues, patient care impact, timeline of last normal operation, and any error codes or system alerts displayed on console."
-    },
-    {
-      "source_file": "hospital_support_questions.json",
-      "section": "Radiology Equipment",
-      "page": 7,
-      "section_id": "7.2",
-      "main_section_id": "7",
-      "context_summary": "Information gathering protocol for CT scanner and X-ray equipment malfunctions affecting diagnostic imaging capabilities and patient scheduling",
-      "keywords": [
-        "CT scanner",
-        "X-ray",
-        "X-ray machine",
-        "imaging equipment",
-        "diagnostic imaging",
-        "radiology equipment",
-        "scanner malfunction",
-        "imaging problems",
-        "CT scan",
-        "radiography",
-        "image quality",
-        "equipment failure"
-      ],
-      "content_type": "support_protocol",
-      "hierarchical_tags": [
-        "Medical Equipment",
-        "Radiology",
-        "CT Scanner",
-        "X-ray Equipment"
-      ],
-      "clinical_domain": [
-        "Radiology",
-        "Medical Imaging",
-        "Diagnostic Services"
-      ],
-      "queue": "2nd line",
-      "issue_category": "CT scanner and X-ray equipment malfunction",
-      "urgency_level": "high",
-      "description": "Covers CT scanners and X-ray equipment experiencing malfunctions, image quality issues, positioning errors, software problems, or calibration failures that impact diagnostic imaging capabilities and patient care scheduling.",
-      "questions_to_ask": [
-        "What type of imaging equipment is affected (CT scanner, X-ray machine, portable unit)?",
-        "What specific malfunction or error are you observing?",
-        "Are there any error messages displayed on the system console?",
-        "How many patients are affected by delays due to this equipment issue?",
-        "When was the last successful imaging procedure completed on this equipment?"
-      ],
-      "text": "CT scanner and X-ray equipment malfunction protocol for 2nd line. Covers CT scanners and X-ray machines with image quality issues, positioning errors, software problems, or calibration failures affecting diagnostic capabilities. Essential questions: type of imaging equipment, specific malfunction or error, error messages on console, number of affected patients, and timeline of last successful procedure."
-    },
-    {
-      "source_file": "hospital_support_questions.json",
-      "section": "Laboratory Equipment",
-      "page": 8,
-      "section_id": "8.1",
-      "main_section_id": "8",
-      "context_summary": "Information gathering protocol for clinical laboratory equipment malfunctions including analyzers, centrifuges, microscopes, and testing devices affecting diagnostic capabilities",
-      "keywords": [
-        "laboratory equipment",
-        "lab equipment",
-        "analyzers",
-        "centrifuges",
-        "microscopes",
-        "testing devices",
-        "lab malfunction",
-        "diagnostic equipment",
-        "blood analyzer",
-        "chemistry analyzer",
-        "hematology analyzer",
-        "lab instruments"
-      ],
-      "content_type": "support_protocol",
-      "hierarchical_tags": [
-        "Medical Equipment",
-        "Laboratory",
-        "Diagnostic Equipment",
-        "Clinical Testing"
-      ],
-      "clinical_domain": [
-        "Laboratory Services",
-        "Clinical Diagnostics",
-        "Pathology"
-      ],
-      "queue": "Technical Support",
-      "issue_category": "Laboratory equipment malfunction",
-      "urgency_level": "high",
-      "description": "Covers clinical laboratory equipment including blood analyzers, chemistry analyzers, hematology instruments, centrifuges, microscopes, and other testing devices experiencing calibration errors, mechanical failures, or software issues affecting diagnostic testing.",
-      "questions_to_ask": [
-        "What specific laboratory equipment is malfunctioning?",
-        "What error messages or abnormal readings are being displayed?",
-        "Are test results being affected or are tests unable to run?",
-        "How many pending tests or samples are being delayed?",
-        "When was the equipment last calibrated or serviced?"
-      ],
-      "text": "Laboratory equipment malfunction protocol for Technical Support. Covers blood analyzers, chemistry analyzers, hematology instruments, centrifuges, microscopes, and testing devices with calibration errors, mechanical failures, or software issues. Essential questions: specific equipment type, error messages or abnormal readings, impact on test results, number of delayed tests or samples, and last calibration or service date."
-    },
-    {
-      "source_file": "hospital_support_questions.json",
-      "section": "Patient Care Systems",
-      "page": 9,
-      "section_id": "9.1",
-      "main_section_id": "9",
-      "context_summary": "Information gathering protocol for nurse call systems, patient monitoring equipment, and bedside communication devices affecting patient safety and care coordination",
-      "keywords": [
-        "nurse call system",
-        "patient monitoring",
-        "bedside equipment",
-        "call buttons",
-        "patient alarms",
-        "monitoring equipment",
-        "telemetry",
-        "bedside monitors",
-        "patient communication",
-        "call light",
-        "emergency call"
-      ],
-      "content_type": "support_protocol",
-      "hierarchical_tags": [
-        "Patient Care Systems",
-        "Monitoring Equipment",
-        "Communication Systems",
-        "Patient Safety"
-      ],
-      "clinical_domain": [
-        "Patient Care",
-        "Nursing Operations",
-        "Patient Safety"
-      ],
-      "queue": "Technical Support",
-      "issue_category": "Patient care system malfunction",
-      "urgency_level": "high",
-      "description": "Covers nurse call systems, patient monitoring equipment, bedside communication devices, call buttons, and patient alarms that are essential for patient safety, care coordination, and emergency response capabilities.",
-      "questions_to_ask": [
-        "What specific patient care system is not functioning (nurse call, monitors, telemetry)?",
-        "Are patients able to call for help through alternative means?",
-        "How many patient rooms or beds are affected by this issue?",
-        "Are there any critical patients who require continuous monitoring affected?",
-        "When did the nursing staff first notice the system wasn't working properly?"
-      ],
-      "text": "Patient care system malfunction protocol for Technical Support. Covers nurse call systems, patient monitoring equipment, bedside communication devices, call buttons, and patient alarms essential for patient safety and care coordination. Essential questions: specific system not functioning, alternative patient communication means, number of affected rooms or beds, critical patients requiring monitoring, and timeline of staff notification."
-    },
-    {
-      "source_file": "hospital_support_questions.json",
-      "section": "Housekeeping and Environmental Services",
-      "page": 10,
-      "section_id": "10.1",
-      "main_section_id": "10",
-      "context_summary": "Information gathering protocol for housekeeping equipment malfunctions and environmental service issues including cleaning equipment, waste management, and sanitation systems",
-      "keywords": [
-        "housekeeping equipment",
-        "cleaning equipment",
-        "vacuum cleaners",
-        "floor cleaners",
-        "waste management",
-        "sanitation systems",
-        "environmental services",
-        "cleaning supplies",
-        "housekeeping issues",
-        "janitorial equipment"
-      ],
-      "content_type": "support_protocol",
-      "hierarchical_tags": [
-        "Environmental Services",
-        "Housekeeping",
-        "Sanitation",
-        "Cleaning Equipment"
-      ],
-      "clinical_domain": [
-        "Environmental Services",
-        "Infection Control",
-        "Hospital Operations"
-      ],
-      "queue": "Servicedesk",
-      "issue_category": "Housekeeping and environmental services issue",
-      "urgency_level": "medium",
-      "description": "Covers housekeeping and environmental services equipment including vacuum cleaners, floor cleaning machines, waste management systems, and sanitation equipment that support infection control and hospital cleanliness standards.",
-      "questions_to_ask": [
-        "What specific housekeeping or cleaning equipment is malfunctioning?",
-        "Is this affecting the ability to maintain proper sanitation in patient areas?",
-        "Are there any infection control concerns related to this equipment failure?",
-        "How many areas or floors are impacted by this equipment being down?",
-        "Is there backup equipment available while repairs are being made?"
-      ],
-      "text": "Housekeeping and environmental services issue protocol for Servicedesk. Covers vacuum cleaners, floor cleaning machines, waste management systems, and sanitation equipment supporting infection control and hospital cleanliness. Essential questions: specific equipment malfunction, impact on patient area sanitation, infection control concerns, number of affected areas or floors, and backup equipment availability."
-    },
-    {
-  "source_file": "AmbulansintegrationV3.json",
-  "section": "Ambulanskontakter",
-  "page": 1,
-  "section_id": "A9",
-  "main_section_id": "A",
-  "context_summary": "Covers issues where destination does not appear for incoming ambulance patients, requiring filtering adjustments.",
-  "keywords": [
-    "destination saknas",
-    "ambulanskontakt",
-    "akutmodul",
-    "Cosmic"
-  ],
-  "content_type": "support_protocol",
-  "hierarchical_tags": [
-    "Integration",
-    "Akutmodul"
-  ],
-  "clinical_domain": [
-    "Akutsjukvård"
-  ],
-  "queue": "Servicedesk",
-  "issue_category": "Destination visas inte",
-  "urgency_level": "low",
-  "description": "Destination may not appear if it is missing in Paratus or misconfigured, requiring ED staff to filter by 'alla' to see the patient.",
-  "questions_to_ask": [
-    "Vilken destination valdes i Paratus?",
-    "Visas patienten endast om man filtrerar på 'alla'?",
-    "Har destinationen ett giltigt HSAID?",
-    "Har detta påverkat triagering eller patientflöde?",
-    "Har felet inträffat tidigare för samma destination?"
-  ],
-  "text": "Destination kan saknas i ambulansvyn om den inte är korrekt angiven eller speglad. Akuten måste då filtrera på 'alla' för att se patienten."
-},
-{
-  "source_file": "AmbulansintegrationV3.json",
-  "section": "Akutmodul",
-  "page": 1,
-  "section_id": "A8",
-  "main_section_id": "A",
-  "context_summary": "Covers cases where the ED cannot start an emergency contact because the patient already has an active admission.",
-  "keywords": [
-    "akutkontakt",
-    "patient inskriven",
-    "Cosmic",
-    "felmeddelande"
-  ],
-  "content_type": "support_protocol",
-  "hierarchical_tags": [
-    "Akutmodul",
-    "Patientflöde"
-  ],
-  "clinical_domain": [
-    "Akutsjukvård",
-    "Patientadministration"
-  ],
-  "queue": "Servicedesk",
-  "issue_category": "Akutkontakt kan inte startas",
-  "urgency_level": "medium",
-  "description": "Occurs when a patient appearing in the ambulance contact list is already admitted in another unit, preventing the ED from starting an emergency contact.",
-  "questions_to_ask": [
-    "Var är patienten redan inskriven enligt Cosmic?",
-    "Försökte ni starta akutenkontakt från fliken Ambulanskontakter?",
-    "Visades något specifikt felmeddelande?",
-    "Har patienten dubbla vårdtillfällen registrerade?",
-    "Behöver akuten starta kontakten manuellt enligt rutin?"
-  ],
-  "text": "När patienten redan är inskriven på en annan enhet går det inte att starta akutkontakt från ambulansfliken. Akuten behöver då starta kontakten enligt ordinarie rutin."
-},
-{
-  "source_file": "AmbulansintegrationV3.json",
-  "section": "HSAID och stationskoppling",
-  "page": 1,
-  "section_id": "A7",
-  "main_section_id": "A",
-  "context_summary": "Covers cases where ambulances appear as belonging to the wrong station because some stations lack HSAID entries.",
-  "keywords": [
-    "HSAID",
-    "ambulanstation",
-    "stationsfel",
-    "Paratus",
-    "Cosmic"
-  ],
-  "content_type": "support_protocol",
-  "hierarchical_tags": [
-    "Configuration",
-    "Ambulans"
-  ],
-  "clinical_domain": [
-    "Akutsjukvård"
-  ],
-  "queue": "Servicedesk",
-  "issue_category": "Ambulans visas under fel station",
-  "urgency_level": "low",
-  "description": "Stations such as Nordmaling, Vännäs and Robertsfors lack HSAID entries, causing their vehicles to appear as belonging to Umeå or Skellefteå instead.",
-  "questions_to_ask": [
-    "Vilken bil och station gäller ärendet?",
-    "Visas bilen under en annan station i Cosmic?",
-    "Har stationen ett giltigt HSAID i VSS?",
-    "Har problemet uppstått för samma bil tidigare?",
-    "Behöver mottagande enhet fatta beslut beroende på stationstillhörighet?"
-  ],
-  "text": "Vissa stationer saknar HSAID vilket leder till att fordon visas under fel ambulansstation i Cosmic. Kräver korrigering i VSS."
-}
-
-
-  ]
+  {
+    "source_file": "hospital_support_questions.json",
+    "section": "Facilities and Fixtures",
+    "page": 1,
+    "section_id": "1.1",
+    "main_section_id": "1",
+    "context_summary": "Information gathering protocol for facility fixture malfunctions including faucets, toilets, lighting, doors, and general infrastructure problems affecting daily operations",
+    "keywords": [
+      "facilities",
+      "fixtures",
+      "faucets",
+      "toilets",
+      "sinks",
+      "light bulbs",
+      "ceiling tiles",
+      "doors",
+      "leaks",
+      "broken handles",
+      "lighting problems",
+      "water pressure",
+      "maintenance department",
+      "plumbing",
+      "electrical fixtures"
+    ],
+    "content_type": "support_protocol",
+    "hierarchical_tags": [
+      "Maintenance",
+      "Facilities",
+      "Infrastructure",
+      "Physical Systems"
+    ],
+    "clinical_domain": [
+      "Hospital Operations",
+      "Facility Management"
+    ],
+    "queue": "Maintenance Department",
+    "issue_category": "Facilities or Fixtures malfunction",
+    "urgency_level": "medium",
+    "description": "Covers problems related to physical facility fixtures such as faucets, toilets, sinks, light bulbs, ceiling tiles, trash cans, bed remotes, doors, and paint. This includes leaks, missing or broken items, control malfunctions, non-functional lighting, poor water pressure, and deteriorating finishes.",
+    "questions_to_ask": [
+      "Which specific room or area is affected by this issue?",
+      "When did you first notice the problem?",
+      "Is anyone's care or work being significantly affected by this issue?",
+      "Have you noticed any changes in the issue either worsening or improving since it began?",
+      "Are there any visible signs of damage, leaking, or unusual odors?"
+    ],
+    "text": "Facilities or fixtures malfunction protocol for Maintenance Department. Covers problems with faucets, toilets, sinks, light bulbs, ceiling tiles, doors, paint, leaks, broken handles, lighting issues, and water pressure problems. Essential questions: specific room or area affected, timeline of problem onset, impact on care or work, progression of issue, and visible damage or odors."
+  },
+  {
+    "source_file": "hospital_support_questions.json",
+    "section": "Facilities and Fixtures",
+    "page": 1,
+    "section_id": "1.2",
+    "main_section_id": "1",
+    "context_summary": "Information gathering protocol for HVAC and climate control issues including temperature problems, air quality concerns, and ventilation system malfunctions",
+    "keywords": [
+      "HVAC",
+      "air conditioning",
+      "heating",
+      "temperature",
+      "too hot",
+      "too cold",
+      "air quality",
+      "ventilation",
+      "climate control",
+      "thermostat",
+      "air flow",
+      "humidity",
+      "stuffy air"
+    ],
+    "content_type": "support_protocol",
+    "hierarchical_tags": [
+      "Maintenance",
+      "HVAC",
+      "Climate Control",
+      "Environmental Systems"
+    ],
+    "clinical_domain": [
+      "Hospital Operations",
+      "Environmental Services"
+    ],
+    "queue": "Maintenance Department",
+    "issue_category": "HVAC and climate control issues",
+    "urgency_level": "medium",
+    "description": "Covers heating, ventilation, and air conditioning problems including temperature control issues, poor air quality, inadequate airflow, humidity problems, and thermostat malfunctions affecting patient and staff comfort.",
+    "questions_to_ask": [
+      "What is the current temperature in the affected area?",
+      "Is the issue with heating, cooling, or air circulation?",
+      "How long has the temperature been uncomfortable?",
+      "Are multiple rooms affected or just this specific area?",
+      "Have you noticed any unusual sounds from vents or HVAC equipment?"
+    ],
+    "text": "HVAC and climate control issue protocol for Maintenance Department. Covers heating, cooling, ventilation problems, temperature control issues, poor air quality, inadequate airflow, and humidity problems. Essential questions: current temperature, type of climate issue, duration of problem, scope of affected areas, and unusual HVAC sounds."
+  },
+  {
+    "source_file": "hospital_support_questions.json",
+    "section": "Medical Equipment",
+    "page": 2,
+    "section_id": "2.1",
+    "main_section_id": "2",
+    "context_summary": "Information gathering protocol for general medical equipment malfunctions including beds, lifts, monitors, and patient care devices affecting clinical operations",
+    "keywords": [
+      "medical equipment",
+      "patient beds",
+      "adjustable beds",
+      "lifts",
+      "exam chairs",
+      "monitors",
+      "remotes",
+      "bed controls",
+      "patient lifts",
+      "medical devices",
+      "equipment malfunction",
+      "broken equipment"
+    ],
+    "content_type": "support_protocol",
+    "hierarchical_tags": [
+      "Medical Equipment",
+      "Patient Care",
+      "Clinical Devices",
+      "Healthcare Technology"
+    ],
+    "clinical_domain": [
+      "Patient Care",
+      "Clinical Operations"
+    ],
+    "queue": "Technical Support",
+    "issue_category": "Medical equipment malfunction",
+    "urgency_level": "high",
+    "description": "Covers malfunctioning medical or patient-use equipment, including adjustable beds, lifts, exam chairs, oxygen flow meters, monitors, and remotes. Typical issues include unresponsive controls, electrical faults, physical damage, broken parts, or intermittent behavior.",
+    "questions_to_ask": [
+      "Do you know the exact model and serial number of the equipment?",
+      "What specific symptoms or errors is the equipment displaying?",
+      "Is any patient care being delayed or compromised due to this issue?",
+      "When was the equipment last functioning correctly?",
+      "Has the equipment been moved recently or experienced any physical impact?"
+    ],
+    "text": "Medical equipment malfunction protocol for Technical Support. Covers adjustable beds, lifts, exam chairs, monitors, remotes, oxygen flow meters with unresponsive controls, electrical faults, physical damage, or broken parts. Essential questions: model and serial number, specific symptoms or errors, patient care impact, timeline of last normal function, and recent movement or physical impact."
+  },
+  {
+    "source_file": "hospital_support_questions.json",
+    "section": "Medical Equipment",
+    "page": 2,
+    "section_id": "2.2",
+    "main_section_id": "2",
+    "context_summary": "Information gathering protocol for IV pumps and infusion device malfunctions affecting medication delivery and patient safety",
+    "keywords": [
+      "IV pump",
+      "infusion pump",
+      "medication delivery",
+      "pump malfunction",
+      "IV equipment",
+      "infusion device",
+      "pump error",
+      "medication pump",
+      "drip pump",
+      "syringe pump",
+      "pump alarm"
+    ],
+    "content_type": "support_protocol",
+    "hierarchical_tags": [
+      "Medical Equipment",
+      "IV Therapy",
+      "Medication Delivery",
+      "Critical Care Equipment"
+    ],
+    "clinical_domain": [
+      "Patient Care",
+      "Medication Management",
+      "Critical Care"
+    ],
+    "queue": "Technical Support",
+    "issue_category": "IV pump and infusion device malfunction",
+    "urgency_level": "high",
+    "description": "Covers IV pumps, infusion pumps, syringe pumps, and other medication delivery devices experiencing malfunctions, error messages, alarm conditions, or delivery inaccuracies that could impact patient safety and medication administration.",
+    "questions_to_ask": [
+      "What is the make, model, and asset number of the IV pump?",
+      "What error messages or alarms is the pump displaying?",
+      "Is the pump currently connected to a patient?",
+      "What medication or fluid was being infused when the problem occurred?",
+      "Has the pump been dropped or experienced any physical trauma recently?"
+    ],
+    "text": "IV pump and infusion device malfunction protocol for Technical Support. Covers IV pumps, syringe pumps, medication delivery devices with error messages, alarms, or delivery inaccuracies affecting patient safety. Essential questions: make, model, and asset number, error messages or alarms, patient connection status, medication being infused, and recent physical trauma."
+  },
+  {
+    "source_file": "hospital_support_questions.json",
+    "section": "Environmental and Structural",
+    "page": 3,
+    "section_id": "3.1",
+    "main_section_id": "3",
+    "context_summary": "Information gathering protocol for building infrastructure and environmental concerns including structural issues, leaks, pest activity, and air quality problems",
+    "keywords": [
+      "environmental issues",
+      "structural problems",
+      "strange noises",
+      "ceiling leaks",
+      "pest activity",
+      "wall damage",
+      "strong odors",
+      "mold smells",
+      "cracking walls",
+      "air pressure",
+      "pest droppings",
+      "water damage"
+    ],
+    "content_type": "support_protocol",
+    "hierarchical_tags": [
+      "Maintenance",
+      "Environmental Services",
+      "Building Infrastructure",
+      "Safety"
+    ],
+    "clinical_domain": [
+      "Hospital Operations",
+      "Environmental Safety"
+    ],
+    "queue": "Maintenance Department",
+    "issue_category": "Environmental or structural issue",
+    "urgency_level": "medium",
+    "description": "Covers building infrastructure and environmental concerns including strange noises, temperature control, ceiling leaks, pest activity, wall damage, or strong odors. Common signs include noises from HVAC or ceilings, mold smells, cracking walls, air pressure issues, or pest droppings.",
+    "questions_to_ask": [
+      "Can you describe the exact location and nature of what you're observing?",
+      "Are there any changes in temperature, humidity, or air quality associated with this issue?",
+      "Has there been any recent construction, weather events, or other changes that might be related?",
+      "Have you noticed the issue getting worse over time or spreading to other areas?",
+      "Are any patients or staff reporting symptoms that could be related to this issue?"
+    ],
+    "text": "Environmental or structural issue protocol for Maintenance Department. Covers strange noises, ceiling leaks, pest activity, wall damage, strong odors, mold smells, cracking walls, and air pressure issues. Essential questions: exact location and nature of observation, temperature or air quality changes, recent construction or weather events, progression or spread of issue, and related patient or staff symptoms."
+  },
+  {
+    "source_file": "hospital_support_questions.json",
+    "section": "IT and Device Issues",
+    "page": 4,
+    "section_id": "4.1",
+    "main_section_id": "4",
+    "context_summary": "Information gathering protocol for hospital communication and IT equipment including phones, computers, printers, monitors, and connectivity issues",
+    "keywords": [
+      "IT issues",
+      "device malfunction",
+      "phones",
+      "computers",
+      "printers",
+      "monitors",
+      "internet",
+      "connectivity",
+      "charging failure",
+      "screen blackouts",
+      "login problems",
+      "device not powering",
+      "network issues"
+    ],
+    "content_type": "support_protocol",
+    "hierarchical_tags": [
+      "IT Support",
+      "Hardware",
+      "Communication Systems",
+      "Network Infrastructure"
+    ],
+    "clinical_domain": [
+      "IT Support",
+      "Hospital Information Systems"
+    ],
+    "queue": "IT Department",
+    "issue_category": "IT or device malfunction",
+    "urgency_level": "high",
+    "description": "Covers problems with hospital communication and IT equipment including phones, computers, printers, monitors, and internet-connected devices. Issues may include charging failure, screen blackouts, login problems, device not powering on, connectivity interruptions, or peripheral malfunctions.",
+    "questions_to_ask": [
+      "Do you know the device model and asset tag number?",
+      "What specific error messages or behaviors are you experiencing?",
+      "Were there any system updates, power outages, or changes before the issue started?",
+      "Does the issue happen consistently or only under certain conditions?",
+      "How is this affecting your ability to perform your duties or provide patient care?"
+    ],
+    "text": "IT or device malfunction protocol for IT Department. Covers phones, computers, printers, monitors, internet devices with charging failure, screen blackouts, login problems, power issues, or connectivity interruptions. Essential questions: device model and asset tag, specific error messages or behaviors, recent updates or power issues, consistency of problem, and impact on duties or patient care."
+  },
+  {
+    "source_file": "hospital_support_questions.json",
+    "section": "IT and Device Issues",
+    "page": 4,
+    "section_id": "4.2",
+    "main_section_id": "4",
+    "context_summary": "Information gathering protocol for software installation failures, crashes, performance issues, licensing problems, and general software malfunctions affecting hospital systems",
+    "keywords": [
+      "software",
+      "installation",
+      "crashes",
+      "slow performance",
+      "error messages",
+      "licensing problems",
+      "compatibility issues",
+      "update failures",
+      "software malfunctions",
+      "not installed",
+      "won't launch",
+      "corrupted installation",
+      "dependencies",
+      "configuration problems"
+    ],
+    "content_type": "support_protocol",
+    "hierarchical_tags": [
+      "IT Support",
+      "Software",
+      "Applications",
+      "System Support"
+    ],
+    "clinical_domain": [
+      "IT Support",
+      "Hospital Information Systems"
+    ],
+    "queue": "IT Department",
+    "issue_category": "Software installation and functionality issues",
+    "urgency_level": "medium",
+    "description": "Covers issues related to software not being installed, installation failures, software crashes, slow performance, error messages, licensing problems, compatibility issues, update failures, and general software malfunctions. May also include missing software dependencies, corrupted installations, or configuration problems.",
+    "questions_to_ask": [
+      "What specific issue are you experiencing with the software? (e.g., not installed, crashes, slow performance, error messages, won't launch)",
+      "Are there any error codes or alerts being displayed?",
+      "When did the issue first occur?",
+      "What device or platform are you using? (e.g., Windows 10, macOS, specific workstation model)",
+      "Has there been any recent update or change to the software, operating system, or hardware before this issue began?"
+    ],
+    "text": "Software installation and functionality issue protocol for IT Department. Covers software not being installed, installation failures, crashes, slow performance, error messages, licensing problems, compatibility issues, update failures, and general malfunctions. Essential questions: specific software symptoms, error codes or alerts, timeline of issue onset, device and platform details, and recent software or system changes."
+  },
+  {
+    "source_file": "hospital_support_questions.json",
+    "section": "Safety and Security",
+    "page": 5,
+    "section_id": "5.1",
+    "main_section_id": "5",
+    "context_summary": "Information gathering protocol for safety and security incidents where safety may be compromised including broken locks, emergency exits, and hazards",
+    "keywords": [
+      "safety concerns",
+      "security issues",
+      "broken locks",
+      "security doors",
+      "alarms not working",
+      "emergency exits",
+      "tripping hazards",
+      "safety protocols",
+      "security vulnerability",
+      "emergency access",
+      "door locks"
+    ],
+    "content_type": "support_protocol",
+    "hierarchical_tags": [
+      "Security",
+      "Safety",
+      "Emergency Systems",
+      "Access Control"
+    ],
+    "clinical_domain": [
+      "Hospital Security",
+      "Safety Management"
+    ],
+    "queue": "Security Department",
+    "issue_category": "Safety or security concern",
+    "urgency_level": "high",
+    "description": "Covers incidents where safety or security may be compromised. Examples include broken locks, malfunctioning security doors, alarms not working, emergency exits jammed, or tripping hazards in hallways. Prompt action ensures compliance with safety protocols.",
+    "questions_to_ask": [
+      "What specific safety hazard or security vulnerability have you identified?",
+      "Is there an immediate threat to anyone's safety that requires urgent action?",
+      "How many people are potentially affected by this issue?",
+      "Have any temporary measures been put in place to mitigate the risk?",
+      "Has this issue been reported previously or is this the first occurrence?"
+    ],
+    "text": "Safety or security concern protocol for Security Department. Covers broken locks, malfunctioning security doors, non-working alarms, jammed emergency exits, and tripping hazards affecting safety protocols. Essential questions: specific hazard or vulnerability, immediate threat level, number of people affected, temporary mitigation measures, and previous occurrence history."
+  },
+  {
+    "source_file": "hospital_support_questions.json",
+    "section": "Supply and Logistics",
+    "page": 6,
+    "section_id": "6.1",
+    "main_section_id": "6",
+    "context_summary": "Information gathering protocol for supply shortages, missing essential items, and logistics issues affecting hospital operations and patient care",
+    "keywords": [
+      "supply issues",
+      "logistics problems",
+      "missing supplies",
+      "shortage",
+      "trash bins",
+      "medical supplies",
+      "linens",
+      "PPE",
+      "personal protective equipment",
+      "documentation materials",
+      "essential items",
+      "stock out"
+    ],
+    "content_type": "support_protocol",
+    "hierarchical_tags": [
+      "Supply Chain",
+      "Logistics",
+      "Inventory Management",
+      "Patient Care Supplies"
+    ],
+    "clinical_domain": [
+      "Supply Chain Management",
+      "Patient Care Operations"
+    ],
+    "queue": "Logistics Department",
+    "issue_category": "Supply or logistics issue",
+    "urgency_level": "medium",
+    "description": "Covers absence, shortage, or misplacement of essential hospital items such as trash bins, medical supplies, linens, PPE, or documentation materials. Ensures the continuous availability of tools and supplies required for uninterrupted patient care.",
+    "questions_to_ask": [
+      "What specific supplies are needed and in what quantities?",
+      "How urgently are these supplies needed for patient care?",
+      "When was the last time these supplies were available in your area?",
+      "Are there any scheduled procedures or treatments that will be affected without these supplies?",
+      "Is this a one-time shortage or a recurring issue with particular items?"
+    ],
+    "text": "Supply or logistics issue protocol for Logistics Department. Covers absence, shortage, or misplacement of trash bins, medical supplies, linens, PPE, and documentation materials affecting patient care operations. Essential questions: specific supplies and quantities needed, urgency for patient care, last availability timeline, affected procedures or treatments, and frequency of shortage occurrence."
+  },
+  {
+    "source_file": "hospital_support_questions.json",
+    "section": "Radiology Equipment",
+    "page": 7,
+    "section_id": "7.1",
+    "main_section_id": "7",
+    "context_summary": "Information gathering protocol for MRI scanner malfunctions including hardware, software, cooling, and imaging quality issues requiring specialized radiology and maintenance support",
+    "keywords": [
+      "MRI scanner",
+      "MRI",
+      "scanner",
+      "busted",
+      "broken",
+      "malfunctioning",
+      "radiology",
+      "medical imaging",
+      "gradient coil",
+      "RF coil",
+      "cooling system",
+      "patient table",
+      "door interlock",
+      "image artifacts",
+      "abnormal noises",
+      "scanner problems",
+      "imaging equipment",
+      "diagnostic equipment"
+    ],
+    "content_type": "support_protocol",
+    "hierarchical_tags": [
+      "Medical Equipment",
+      "Radiology",
+      "MRI",
+      "Diagnostic Imaging"
+    ],
+    "clinical_domain": [
+      "Radiology",
+      "Medical Imaging",
+      "Diagnostic Services"
+    ],
+    "queue": "2nd line",
+    "issue_category": "MRI scanner issue",
+    "urgency_level": "high",
+    "description": "Covers issues related to MRI scanners including abnormal noises, image artifacts, gradient or RF coil malfunctions, cooling system failures, patient table errors, door interlock problems, power interruptions, and software or firmware glitches.",
+    "questions_to_ask": [
+      "What is the model and serial number of the MRI scanner?",
+      "What specific issue are you experiencing (e.g., noise, image quality, cooling failure)?",
+      "Is patient imaging currently being delayed or canceled due to this problem?",
+      "When was the scanner last used without any issues?",
+      "Have any error codes or system alerts been displayed on the console?"
+    ],
+    "text": "MRI scanner issue protocol for 2nd line. Covers abnormal noises, image artifacts, gradient or RF coil malfunctions, cooling system failures, patient table errors, door interlock problems, power interruptions, and software glitches. Essential questions: model and serial number, specific symptoms like noise or image quality issues, patient care impact, timeline of last normal operation, and any error codes or system alerts displayed on console."
+  },
+  {
+    "source_file": "hospital_support_questions.json",
+    "section": "Radiology Equipment",
+    "page": 7,
+    "section_id": "7.2",
+    "main_section_id": "7",
+    "context_summary": "Information gathering protocol for CT scanner and X-ray equipment malfunctions affecting diagnostic imaging capabilities and patient scheduling",
+    "keywords": [
+      "CT scanner",
+      "X-ray",
+      "X-ray machine",
+      "imaging equipment",
+      "diagnostic imaging",
+      "radiology equipment",
+      "scanner malfunction",
+      "imaging problems",
+      "CT scan",
+      "radiography",
+      "image quality",
+      "equipment failure"
+    ],
+    "content_type": "support_protocol",
+    "hierarchical_tags": [
+      "Medical Equipment",
+      "Radiology",
+      "CT Scanner",
+      "X-ray Equipment"
+    ],
+    "clinical_domain": [
+      "Radiology",
+      "Medical Imaging",
+      "Diagnostic Services"
+    ],
+    "queue": "2nd line",
+    "issue_category": "CT scanner and X-ray equipment malfunction",
+    "urgency_level": "high",
+    "description": "Covers CT scanners and X-ray equipment experiencing malfunctions, image quality issues, positioning errors, software problems, or calibration failures that impact diagnostic imaging capabilities and patient care scheduling.",
+    "questions_to_ask": [
+      "What type of imaging equipment is affected (CT scanner, X-ray machine, portable unit)?",
+      "What specific malfunction or error are you observing?",
+      "Are there any error messages displayed on the system console?",
+      "How many patients are affected by delays due to this equipment issue?",
+      "When was the last successful imaging procedure completed on this equipment?"
+    ],
+    "text": "CT scanner and X-ray equipment malfunction protocol for 2nd line. Covers CT scanners and X-ray machines with image quality issues, positioning errors, software problems, or calibration failures affecting diagnostic capabilities. Essential questions: type of imaging equipment, specific malfunction or error, error messages on console, number of affected patients, and timeline of last successful procedure."
+  },
+  {
+    "source_file": "hospital_support_questions.json",
+    "section": "Laboratory Equipment",
+    "page": 8,
+    "section_id": "8.1",
+    "main_section_id": "8",
+    "context_summary": "Information gathering protocol for clinical laboratory equipment malfunctions including analyzers, centrifuges, microscopes, and testing devices affecting diagnostic capabilities",
+    "keywords": [
+      "laboratory equipment",
+      "lab equipment",
+      "analyzers",
+      "centrifuges",
+      "microscopes",
+      "testing devices",
+      "lab malfunction",
+      "diagnostic equipment",
+      "blood analyzer",
+      "chemistry analyzer",
+      "hematology analyzer",
+      "lab instruments"
+    ],
+    "content_type": "support_protocol",
+    "hierarchical_tags": [
+      "Medical Equipment",
+      "Laboratory",
+      "Diagnostic Equipment",
+      "Clinical Testing"
+    ],
+    "clinical_domain": [
+      "Laboratory Services",
+      "Clinical Diagnostics",
+      "Pathology"
+    ],
+    "queue": "Technical Support",
+    "issue_category": "Laboratory equipment malfunction",
+    "urgency_level": "high",
+    "description": "Covers clinical laboratory equipment including blood analyzers, chemistry analyzers, hematology instruments, centrifuges, microscopes, and other testing devices experiencing calibration errors, mechanical failures, or software issues affecting diagnostic testing.",
+    "questions_to_ask": [
+      "What specific laboratory equipment is malfunctioning?",
+      "What error messages or abnormal readings are being displayed?",
+      "Are test results being affected or are tests unable to run?",
+      "How many pending tests or samples are being delayed?",
+      "When was the equipment last calibrated or serviced?"
+    ],
+    "text": "Laboratory equipment malfunction protocol for Technical Support. Covers blood analyzers, chemistry analyzers, hematology instruments, centrifuges, microscopes, and testing devices with calibration errors, mechanical failures, or software issues. Essential questions: specific equipment type, error messages or abnormal readings, impact on test results, number of delayed tests or samples, and last calibration or service date."
+  },
+  {
+    "source_file": "hospital_support_questions.json",
+    "section": "Patient Care Systems",
+    "page": 9,
+    "section_id": "9.1",
+    "main_section_id": "9",
+    "context_summary": "Information gathering protocol for nurse call systems, patient monitoring equipment, and bedside communication devices affecting patient safety and care coordination",
+    "keywords": [
+      "nurse call system",
+      "patient monitoring",
+      "bedside equipment",
+      "call buttons",
+      "patient alarms",
+      "monitoring equipment",
+      "telemetry",
+      "bedside monitors",
+      "patient communication",
+      "call light",
+      "emergency call"
+    ],
+    "content_type": "support_protocol",
+    "hierarchical_tags": [
+      "Patient Care Systems",
+      "Monitoring Equipment",
+      "Communication Systems",
+      "Patient Safety"
+    ],
+    "clinical_domain": [
+      "Patient Care",
+      "Nursing Operations",
+      "Patient Safety"
+    ],
+    "queue": "Technical Support",
+    "issue_category": "Patient care system malfunction",
+    "urgency_level": "high",
+    "description": "Covers nurse call systems, patient monitoring equipment, bedside communication devices, call buttons, and patient alarms that are essential for patient safety, care coordination, and emergency response capabilities.",
+    "questions_to_ask": [
+      "What specific patient care system is not functioning (nurse call, monitors, telemetry)?",
+      "Are patients able to call for help through alternative means?",
+      "How many patient rooms or beds are affected by this issue?",
+      "Are there any critical patients who require continuous monitoring affected?",
+      "When did the nursing staff first notice the system wasn't working properly?"
+    ],
+    "text": "Patient care system malfunction protocol for Technical Support. Covers nurse call systems, patient monitoring equipment, bedside communication devices, call buttons, and patient alarms essential for patient safety and care coordination. Essential questions: specific system not functioning, alternative patient communication means, number of affected rooms or beds, critical patients requiring monitoring, and timeline of staff notification."
+  },
+  {
+    "source_file": "hospital_support_questions.json",
+    "section": "Housekeeping and Environmental Services",
+    "page": 10,
+    "section_id": "10.1",
+    "main_section_id": "10",
+    "context_summary": "Information gathering protocol for housekeeping equipment malfunctions and environmental service issues including cleaning equipment, waste management, and sanitation systems",
+    "keywords": [
+      "housekeeping equipment",
+      "cleaning equipment",
+      "vacuum cleaners",
+      "floor cleaners",
+      "waste management",
+      "sanitation systems",
+      "environmental services",
+      "cleaning supplies",
+      "housekeeping issues",
+      "janitorial equipment"
+    ],
+    "content_type": "support_protocol",
+    "hierarchical_tags": [
+      "Environmental Services",
+      "Housekeeping",
+      "Sanitation",
+      "Cleaning Equipment"
+    ],
+    "clinical_domain": [
+      "Environmental Services",
+      "Infection Control",
+      "Hospital Operations"
+    ],
+    "queue": "Servicedesk",
+    "issue_category": "Housekeeping and environmental services issue",
+    "urgency_level": "medium",
+    "description": "Covers housekeeping and environmental services equipment including vacuum cleaners, floor cleaning machines, waste management systems, and sanitation equipment that support infection control and hospital cleanliness standards.",
+    "questions_to_ask": [
+      "What specific housekeeping or cleaning equipment is malfunctioning?",
+      "Is this affecting the ability to maintain proper sanitation in patient areas?",
+      "Are there any infection control concerns related to this equipment failure?",
+      "How many areas or floors are impacted by this equipment being down?",
+      "Is there backup equipment available while repairs are being made?"
+    ],
+    "text": "Housekeeping and environmental services issue protocol for Servicedesk. Covers vacuum cleaners, floor cleaning machines, waste management systems, and sanitation equipment supporting infection control and hospital cleanliness. Essential questions: specific equipment malfunction, impact on patient area sanitation, infection control concerns, number of affected areas or floors, and backup equipment availability."
+  },
+  {
+    "source_file": "AmbulansintegrationV3.json",
+    "section": "Ambulance contacts",
+    "page": 1,
+    "section_id": "A9",
+    "main_section_id": "A",
+    "context_summary": "Covers issues where destination does not appear for incoming ambulance patients, requiring filtering adjustments.",
+    "keywords": [
+      "destination missing",
+      "ambulance contact",
+      "emergency module",
+      "Cosmic"
+    ],
+    "content_type": "support_protocol",
+    "hierarchical_tags": [
+      "Integration",
+      "Emergency module"
+    ],
+    "clinical_domain": [
+      "Emergency care"
+    ],
+    "queue": "Servicedesk",
+    "issue_category": "Destination not shown",
+    "urgency_level": "low",
+    "description": "Destination may not appear if it is missing in Paratus or misconfigured, requiring ED staff to filter by 'all' to see the patient.",
+    "questions_to_ask": [
+      "Which destination was selected in Paratus?",
+      "Is the patient only shown when filtering by 'all'?",
+      "Does the destination have a valid HSAID?",
+      "Has this affected triage or patient flow?",
+      "Has the issue occurred before for the same destination?"
+    ],
+    "text": "Destination may be missing in the ambulance view if it is not correctly entered or mirrored. The ED must then filter by 'all' to see the patient."
+  },
+  {
+    "source_file": "AmbulansintegrationV3.json",
+    "section": "Emergency module",
+    "page": 1,
+    "section_id": "A8",
+    "main_section_id": "A",
+    "context_summary": "Covers cases where the ED cannot start an emergency contact because the patient already has an active admission.",
+    "keywords": [
+      "emergency contact",
+      "patient admitted",
+      "Cosmic",
+      "error message"
+    ],
+    "content_type": "support_protocol",
+    "hierarchical_tags": [
+      "Emergency module",
+      "Patient flow"
+    ],
+    "clinical_domain": [
+      "Emergency care",
+      "Patient administration"
+    ],
+    "queue": "Servicedesk",
+    "issue_category": "Emergency contact cannot be started",
+    "urgency_level": "medium",
+    "description": "Occurs when a patient appearing in the ambulance contact list is already admitted in another unit, preventing the ED from starting an emergency contact.",
+    "questions_to_ask": [
+      "Where is the patient already admitted according to Cosmic?",
+      "Did you try to start the emergency contact from the Ambulance contacts tab?",
+      "Was any specific error message shown?",
+      "Does the patient have duplicate care episodes registered?",
+      "Does the ED need to start the contact manually according to routine?"
+    ],
+    "text": "When the patient is already admitted to another unit, it is not possible to start an emergency contact from the ambulance tab. The ED must then start the contact according to routine."
+  },
+  {
+    "source_file": "AmbulansintegrationV3.json",
+    "section": "HSAID and station mapping",
+    "page": 1,
+    "section_id": "A7",
+    "main_section_id": "A",
+    "context_summary": "Covers cases where ambulances appear as belonging to the wrong station because some stations lack HSAID entries.",
+    "keywords": [
+      "HSAID",
+      "ambulance station",
+      "station error",
+      "Paratus",
+      "Cosmic"
+    ],
+    "content_type": "support_protocol",
+    "hierarchical_tags": [
+      "Configuration",
+      "Ambulance"
+    ],
+    "clinical_domain": [
+      "Emergency care"
+    ],
+    "queue": "Servicedesk",
+    "issue_category": "Ambulance shown under wrong station",
+    "urgency_level": "low",
+    "description": "Stations such as Nordmaling, Vännäs and Robertsfors lack HSAID entries, causing their vehicles to appear as belonging to Umeå or Skellefteå instead.",
+    "questions_to_ask": [
+      "Which vehicle and station does the case concern?",
+      "Is the vehicle shown under another station in Cosmic?",
+      "Does the station have a valid HSAID in VSS?",
+      "Has the issue occurred before for the same vehicle?",
+      "Does the receiving unit need to make decisions based on station affiliation?"
+    ],
+    "text": "Some stations lack HSAID, which causes vehicles to appear under the wrong ambulance station in Cosmic. Requires correction in VSS."
+  }
+]

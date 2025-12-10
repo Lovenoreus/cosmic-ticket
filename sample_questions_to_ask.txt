@@ -4,40 +4,40 @@ Below problems were generated from the AmbulansintegrationV3.pdf
 
 1.
 Ambulansbil 9710 visas som tillhörande Umeå ambulansstation i Cosmic, men den ska vara kopplad till Nordmaling. Går det att kontrollera HSAID-konfigurationen?
-English: Ambulance vehicle 9710 appears as belonging to Umeå ambulance station in Cosmic, but it should be linked to Nordmaling. Can you check the HSAID configuration?”)
+Ambulance vehicle 9710 appears as belonging to Umeå ambulance station in Cosmic, but it should be linked to Nordmaling. Can you check the HSAID configuration?”)
 
 2. 
 Vi ser att flera bilar från Vännäs hamnar under fel station i Cosmic. Misstänker att stationens HSAID saknas. Kan detta åtgärdas?
-English: We see that several vehicles from Vännäs appear under the wrong station in Cosmic. We suspect the station’s HSAID is missing. Can this be corrected?”)
+We see that several vehicles from Vännäs appear under the wrong station in Cosmic. We suspect the station’s HSAID is missing. Can this be corrected?”)
 
 3. 
 Robertsfors ambulansfordon visas som Skellefteå i Cosmic, vilket skapar förvirring i larmkedjan. Behöver hjälp att rätta stationstillhörigheten.
-English: Robertsfors ambulance vehicles appear as Skellefteå in Cosmic, which creates confusion in the alarm chain. We need help correcting the station assignment.”)
+Robertsfors ambulance vehicles appear as Skellefteå in Cosmic, which creates confusion in the alarm chain. We need help correcting the station assignment.”)
 
 
 # Problem 8: Akuten kan inte starta akutenkontakt
 
 1. 
 Patienten ligger i listan under Ambulanskontakter men vi kan inte starta akutenkontakt. Cosmic visar att patienten redan är inskriven på en annan enhet.
-English: The patient appears in the Ambulance Contacts list, but we cannot start the ED contact. Cosmic says the patient is already admitted in another unit.”)
+The patient appears in the Ambulance Contacts list, but we cannot start the ED contact. Cosmic says the patient is already admitted in another unit.”)
 
 2. 
 När vi försöker starta akutenkontakten får vi felmeddelande om att patienten redan är inskriven. Vi behöver hjälp att öppna rätt vårdtillfälle.
-English: When we try to start the ED contact, we get an error saying the patient is already admitted. We need help opening the correct care episode.”)
+When we try to start the ED contact, we get an error saying the patient is already admitted. We need help opening the correct care episode.”)
 
 3. 
 Ambulansen har lastat patienten men akuten kan inte starta kontakten. Cosmic säger att patienten redan har ett aktivt vårdtillfälle.
-English: The ambulance has loaded the patient, but the ED cannot start the contact. Cosmic says the patient already has an active care episode.”)
+The ambulance has loaded the patient, but the ED cannot start the contact. Cosmic says the patient already has an active care episode.”)
 
 
 # Problem 9: Destination saknas i ambulansvyn
 
 1. Den inkommande patienten syns i ambulanslistan men destinationen är tom, och vi måste filtrera på ’alla’ för att hitta patienten.
-   English: The incoming patient appears in the ambulance list, but the destination is blank, and we must filter by ‘all’ to find the patient.”)
+   The incoming patient appears in the ambulance list, but the destination is blank, and we must filter by ‘all’ to find the patient.”)
 
 2. Destinationen som ambulansen valde visas inte i Cosmic. Patienten går bara att hitta om vi tar bort filtren i enhetsöversikten.
-   English: The destination selected by the ambulance does not appear in Cosmic. The patient can only be found if we remove the filters in the unit overview.”)
+   The destination selected by the ambulance does not appear in Cosmic. The patient can only be found if we remove the filters in the unit overview.”)
 
 3. Ambulansdestinationen blir ’Annan’ i Cosmic trots att rätt sjukhus valdes i Paratus. Behöver felsökning av HSAID-kopplingen.
-   English: The ambulance destination becomes ‘Other’ in Cosmic even though the correct hospital was selected in Paratus. Troubleshooting of the HSAID mapping is needed.”)
+   The ambulance destination becomes ‘Other’ in Cosmic even though the correct hospital was selected in Paratus. Troubleshooting of the HSAID mapping is needed.”)
 

@@ -1,3 +1,4 @@
+# -------------------- Built-in Libraries --------------------
 import time
 import json
 import asyncio
@@ -41,7 +42,7 @@ class Question:
     index: int
     answered: bool
     answer: Optional[str]
-    
+
     def to_dict(self) -> Dict[str, Any]:
         return {
             "question": self.question,
@@ -49,7 +50,7 @@ class Question:
             "answered": self.answered,
             "answer": self.answer
         }
-    
+
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> 'Question':
         return cls(
@@ -79,26 +80,26 @@ def detect_intent(state: AgentState) -> AgentState:
     conversation_history = state.get("conversation_history", [])
     questioning = state.get("questioning", False)
     questions = state.get("questions", [])
-    
+
     # Check if all questions are answered
     all_answered = False
     if questions:
         all_answered = all(q.get("answered", False) for q in questions)
-    
+
     first_question_run_complete = state.get("first_question_run_complete", False)
-    
+
     # If all questions are answered AND questions have been asked at least once, route to create_ticket
     if questions and all_answered and first_question_run_complete:
         # Add user input to conversation history before routing
         updated_history = conversation_history + [HumanMessage(content=user_input)]
         return {"intent": {"mode": "create_ticket"}, "conversation_history": updated_history}
-    
+
     # If questioning is active, route to questioner_agent
     if questioning:
         # Add user input to conversation history before routing
         updated_history = conversation_history + [HumanMessage(content=user_input)]
         return {"intent": {"mode": "questioning"}, "conversation_history": updated_history}
-    
+
     system_prompt = """You are an intent detection agent. Analyze the user's message and determine their intent based on the conversation history.
 
 Return ONLY a valid JSON object with one of these three structures:
@@ -136,25 +137,27 @@ Consider the conversation history when determining intent. If the user is contin
 Return ONLY the JSON, nothing else."""
 
     messages = [SystemMessage(content=system_prompt)]
-    
+
     # Add conversation history
     messages.extend(conversation_history)
-    
+
     # Add current user input
     messages.append(HumanMessage(content=user_input))
-    
+
     response = llm.invoke(messages)
     response_text = response.content.strip()
-    
+
     # Parse JSON from response using utility function
     intent = parse_json_from_response(response_text)
-    
+
+    print(f'This is the intent: {intent}')
+
     # Update conversation history with new messages
     updated_history = conversation_history + [
         HumanMessage(content=user_input),
         AIMessage(content=json.dumps(intent))
     ]
-    
+
     return {"intent": intent, "conversation_history": updated_history}
 
 
@@ -164,7 +167,7 @@ def cosmic_search_agent(state: AgentState) -> AgentState:
     user_input = state.get("user_input", "")
     conversation_history = state.get("conversation_history", [])
     last_cosmic_query = user_input
-    
+
     # Call the cosmic database tool (async function, run in sync context)
     # Use configuration values from config
     tool_result = asyncio.run(cosmic_database_tool2(
@@ -173,34 +176,35 @@ def cosmic_search_agent(state: AgentState) -> AgentState:
         limit=config.QDRANT_RESULT_LIMIT,
         min_score=config.QDRANT_MIN_SCORE
     ))
-    
+
     # Store the full tool result as JSON string in last_cosmic_query_response
     last_cosmic_query_response = json.dumps(tool_result, indent=2)
-    
+
     # Extract the RAG answer from the tool result for bot response
     # The tool returns a dict with "message" field containing the RAG answer
     bot_response = tool_result.get("message", "")
-    
+
     # If no message, use the full tool result as fallback
     if not bot_response:
         bot_response = 'I am sorry, I could not find any information on that topic.'
-    
+
     # Update conversation history
     updated_history = list(conversation_history)
     # Check if user input is already in history (it should be from detect_intent)
     # If not, add it
-    if not updated_history or (isinstance(updated_history[-1], AIMessage) and updated_history[-1].content != json.dumps({"mode": "cosmic_search"})):
+    if not updated_history or (isinstance(updated_history[-1], AIMessage) and updated_history[-1].content != json.dumps(
+            {"mode": "cosmic_search"})):
         updated_history.append(HumanMessage(content=user_input))
     # Add the cosmic search response
     updated_history.append(AIMessage(content=bot_response))
-    
+
     # Return the full modified state
     updated_state = dict(state)
     updated_state["last_cosmic_query"] = last_cosmic_query
     updated_state["last_cosmic_query_response"] = last_cosmic_query_response
     updated_state["bot_response"] = bot_response
     updated_state["conversation_history"] = updated_history
-    
+
     return updated_state
 
 
@@ -208,15 +212,45 @@ def identify_known_question_agent(state: AgentState) -> AgentState:
     """Identify the most appropriate problem template from known_questions.json"""
     # Get the user problem from last cosmic query
     user_problem = state.get("last_cosmic_query", "")
-    
+
     if not user_problem:
         # If no last cosmic query, use current user input
         user_problem = state.get("user_input", "")
-    
-    if not user_problem:
+
+    # Get conversation history to provide more context
+    conversation_history = state.get("conversation_history", [])
+
+    # Extract the latest 10 entries from conversation history
+    recent_history = conversation_history[-10:] if len(conversation_history) > 10 else conversation_history
+
+    # Format conversation history for context
+    conversation_context = ""
+    if recent_history:
+        conversation_context = "\n\nRecent Conversation History:\n"
+        for msg in recent_history:
+            if isinstance(msg, HumanMessage):
+                conversation_context += f"User: {msg.content}\n"
+            elif isinstance(msg, AIMessage):
+                conversation_context += f"Assistant: {msg.content}\n"
+
+    if not user_problem and not conversation_context:
         # No problem to match, return unchanged
-        return {"known_problem_identified": False}
-    
+        updated_state = dict(state)
+        updated_state["known_problem_identified"] = False
+        updated_state["bot_response"] = (
+            "I understand you want to create a ticket, but I need more information about the problem. "
+            "Could you please describe the issue you're experiencing?"
+        )
+        # Update conversation history
+        user_input = state.get("user_input", "")
+        updated_history = list(conversation_history)
+        if not updated_history or not (
+                isinstance(updated_history[-1], HumanMessage) and updated_history[-1].content == user_input):
+            updated_history.append(HumanMessage(content=user_input))
+        updated_history.append(AIMessage(content=updated_state["bot_response"]))
+        updated_state["conversation_history"] = updated_history
+        return updated_state
+
     # Create a summary of all known question templates for the LLM
     templates_summary = []
     for idx, template in enumerate(KNOWN_QUESTIONS):
@@ -230,13 +264,14 @@ def identify_known_question_agent(state: AgentState) -> AgentState:
             "text": template.get("text", "")
         }
         templates_summary.append(template_info)
-    
+
     # Create prompt for matching
     system_prompt = """You are a problem classification agent. Your task is to match a user's problem description to the most appropriate problem template from a list of known issue categories.
 
 You will be given:
-1. A user problem description
-2. A list of problem templates, each with:
+1. A user problem description (current message)
+2. Recent conversation history (last 10 messages) for additional context
+3. A list of problem templates, each with:
    - issue_category: The category name
    - description: Detailed description of what the category covers
    - keywords: Relevant keywords for this category
@@ -245,11 +280,12 @@ You will be given:
    - text: Summary text
 
 Your job is to:
-1. Analyze the user's problem description
-2. Compare it against all available templates
-3. Consider keywords, descriptions, and context
-4. Select the BEST matching template based on semantic similarity and relevance
-5. Return ONLY a JSON object with the index of the matched template
+1. Analyze BOTH the current problem description AND the conversation history
+2. Extract the actual problem from the conversation (the user might say "create a ticket" but the problem was mentioned earlier)
+3. Compare the problem against all available templates
+4. Consider keywords, descriptions, and context
+5. Select the BEST matching template based on semantic similarity and relevance
+6. Return ONLY a JSON object with the index of the matched template
 
 Return format:
 {
@@ -267,33 +303,35 @@ If no template is a good match (confidence < 0.5), return:
 
     # Format templates for the prompt
     templates_text = json.dumps(templates_summary, indent=2)
-    
-    user_prompt = f"""User Problem Description:
+
+    user_prompt = f"""Current User Message:
 {user_problem}
+{conversation_context}
 
 Available Problem Templates:
 {templates_text}
 
-Analyze the user's problem and identify the best matching template. Return ONLY the JSON response."""
+Analyze the user's problem (considering both current message and conversation history) and identify the best matching template. Return ONLY the JSON response."""
 
     messages = [
         SystemMessage(content=system_prompt),
         HumanMessage(content=user_prompt)
     ]
-    
+
     response = llm.invoke(messages)
     response_text = response.content.strip()
-    
+
     # Parse the response
     try:
-        match_result = parse_json_from_response(response_text, default={"matched_index": -1, "confidence": 0.0, "reasoning": "Failed to parse response"})
+        match_result = parse_json_from_response(response_text, default={"matched_index": -1, "confidence": 0.0,
+                                                                        "reasoning": "Failed to parse response"})
         matched_index = match_result.get("matched_index", -1)
         confidence = match_result.get("confidence", 0.0)
         if config.DEBUG:
             print(f"Matched index: {matched_index}")
             print(f"Confidence: {confidence}")
             print(f"Reasoning: {match_result.get('reasoning', 'No reasoning provided')}")
-        
+
         # If we have a valid match with reasonable confidence
         if matched_index >= 0 and matched_index < len(KNOWN_QUESTIONS) and confidence >= 0.5:
             matched_template = KNOWN_QUESTIONS[matched_index]
@@ -307,7 +345,7 @@ Analyze the user's problem and identify the best matching template. Return ONLY 
                     answered=False,
                     answer=None
                 ).to_dict())
-            
+
             # Return the full modified state
             updated_state = dict(state)
             updated_state["known_problem_identified"] = True
@@ -321,12 +359,41 @@ Analyze the user's problem and identify the best matching template. Return ONLY 
             updated_state = dict(state)
             updated_state["known_problem_identified"] = False
             updated_state["match_confidence"] = confidence
+            updated_state["bot_response"] = (
+                "I understand you want to create a ticket, but I'm having trouble identifying "
+                "the specific category for your issue. Could you please provide more details about "
+                "the problem you're experiencing? For example:\n"
+                "- Is it related to hardware (printer, computer, etc.)?\n"
+                "- Is it a software or application issue?\n"
+                "- Is it about network or connectivity?\n"
+                "- Is it related to access or permissions?"
+            )
+            # Update conversation history
+            user_input = state.get("user_input", "")
+            updated_history = list(conversation_history)
+            if not updated_history or not (
+                    isinstance(updated_history[-1], HumanMessage) and updated_history[-1].content == user_input):
+                updated_history.append(HumanMessage(content=user_input))
+            updated_history.append(AIMessage(content=updated_state["bot_response"]))
+            updated_state["conversation_history"] = updated_history
             return updated_state
     except Exception as e:
         # Error in matching
         updated_state = dict(state)
         updated_state["known_problem_identified"] = False
         updated_state["match_error"] = str(e)
+        updated_state["bot_response"] = (
+            "I apologize, but I encountered an error while trying to identify your issue category. "
+            "Could you please describe your problem in more detail so I can assist you better?"
+        )
+        # Update conversation history
+        user_input = state.get("user_input", "")
+        updated_history = list(conversation_history)
+        if not updated_history or not (
+                isinstance(updated_history[-1], HumanMessage) and updated_history[-1].content == user_input):
+            updated_history.append(HumanMessage(content=user_input))
+        updated_history.append(AIMessage(content=updated_state["bot_response"]))
+        updated_state["conversation_history"] = updated_history
         return updated_state
 
 
@@ -338,20 +405,20 @@ def questioner_agent(state: AgentState) -> AgentState:
     last_cosmic_query = state.get("last_cosmic_query", "")
     matched_template = state.get("matched_template", {})
     first_question_run_complete = state.get("first_question_run_complete", False)
-    
+
     # If no questions initialized, return error state
     if not questions_data:
         updated_state = dict(state)
         updated_state["bot_response"] = "Error: No questions initialized. Please start ticket creation again."
         updated_state["questioning"] = False
         return updated_state
-    
+
     # Convert question dicts to Question objects
     questions = [Question.from_dict(q) for q in questions_data]
-    
+
     # Get user problem description
     user_problem = last_cosmic_query if last_cosmic_query else user_input
-    
+
     # First run: scan conversation history and current input, return full formatted response
     if not first_question_run_complete:
         # First, scan conversation history for answers
@@ -363,7 +430,7 @@ def questioner_agent(state: AgentState) -> AgentState:
                     conversation_text += f"User: {msg.content}\n"
                 elif isinstance(msg, AIMessage):
                     conversation_text += f"Assistant: {msg.content}\n"
-            
+
             # Use LLM to extract answers from conversation history
             if conversation_text:
                 system_prompt = """You are an information extraction agent. Your task is to identify which questions have already been answered in the conversation history.
@@ -399,12 +466,12 @@ Analyze the conversation and identify which questions have been answered. Return
                     SystemMessage(content=system_prompt),
                     HumanMessage(content=user_prompt)
                 ]
-                
+
                 try:
                     response = llm.invoke(messages)
                     response_text = response.content.strip()
                     history_answers = parse_json_from_response(response_text, default={"answers": []})
-                    
+
                     # Update questions with answers from history
                     for answer_info in history_answers.get("answers", []):
                         q_idx = answer_info.get("question_index", 0)
@@ -415,7 +482,7 @@ Analyze the conversation and identify which questions have been answered. Return
                 except Exception as e:
                     # If extraction fails, continue without history answers
                     pass
-    
+
         # Now process current user input for answers (only if we have unanswered questions)
         unanswered_before = [q for q in questions if not q.answered]
         if user_input and unanswered_before:
@@ -468,12 +535,12 @@ Analyze the user's message and identify which questions they are answering. Retu
                     SystemMessage(content=system_prompt),
                     HumanMessage(content=user_prompt)
                 ]
-                
+
                 try:
                     response = llm.invoke(messages)
                     response_text = response.content.strip()
                     current_answers = parse_json_from_response(response_text, default={"answers": []})
-                    
+
                     # Update questions with answers from current input
                     for answer_info in current_answers.get("answers", []):
                         q_idx = answer_info.get("question_index", 0)
@@ -484,41 +551,43 @@ Analyze the user's message and identify which questions they are answering. Retu
                 except Exception as e:
                     # If extraction fails, continue
                     pass
-        
+
         # Check if all questions are answered
         all_answered = all(q.answered for q in questions)
-        
+
         # Build bot response - FULL FORMAT for first run
         answered_questions = [q for q in questions if q.answered]
         unanswered_questions = [q for q in questions if not q.answered]
-        
+
         bot_response_parts = []
-        
+
         # Opening statement
         bot_response_parts.append(f"I understand that you want to create a support ticket for {user_problem}.")
-        
+
         if answered_questions:
-            bot_response_parts.append("\nBut first I need to gather some information for the relevant department to better understand the problem.")
+            bot_response_parts.append(
+                "\nBut first I need to gather some information for the relevant department to better understand the problem.")
             bot_response_parts.append("You have already given me answers for the below questions:\n")
             for q in answered_questions:
                 answer_text = q.answer if q.answer != "unknown" else "you mentioned that you don't know"
                 bot_response_parts.append(f"{q.index}. {q.question}")
                 bot_response_parts.append(f"   You have already mentioned that {answer_text}")
-        
+
         if unanswered_questions:
             if not answered_questions:
-                bot_response_parts.append("\nBut first I need to gather some information for the relevant department to better understand the problem.")
+                bot_response_parts.append(
+                    "\nBut first I need to gather some information for the relevant department to better understand the problem.")
             bot_response_parts.append("\nPlease provide answers to the below questions:\n")
             for q in unanswered_questions:
                 bot_response_parts.append(f"{q.index}. {q.question}")
         else:
             bot_response_parts.append("\nThank you! I have gathered all the necessary information.")
-        
+
         bot_response = "\n".join(bot_response_parts)
-        
+
         # Mark first run as complete
         first_question_run_complete = True
-    
+
     else:
         # Subsequent runs: only process current user input, return simpler response
         unanswered_before = [q for q in questions if not q.answered]
@@ -572,12 +641,12 @@ Analyze the user's message and identify which questions they are answering. Retu
                     SystemMessage(content=system_prompt),
                     HumanMessage(content=user_prompt)
                 ]
-                
+
                 try:
                     response = llm.invoke(messages)
                     response_text = response.content.strip()
                     current_answers = parse_json_from_response(response_text, default={"answers": []})
-                    
+
                     # Update questions with answers from current input
                     for answer_info in current_answers.get("answers", []):
                         q_idx = answer_info.get("question_index", 0)
@@ -588,13 +657,13 @@ Analyze the user's message and identify which questions they are answering. Retu
                 except Exception as e:
                     # If extraction fails, continue
                     pass
-        
+
         # Check if all questions are answered
         all_answered = all(q.answered for q in questions)
-        
+
         # Build bot response - SIMPLER FORMAT for subsequent runs
         unanswered_questions = [q for q in questions if not q.answered]
-        
+
         # Generate varied intro message
         import random
         intro_options = [
@@ -610,40 +679,41 @@ Analyze the user's message and identify which questions they are answering. Retu
             "Perfect. A couple more questions remain"
         ]
         intro = random.choice(intro_options)
-        
+
         bot_response_parts = [intro]
         bot_response_parts.append("")
-        
+
         # Add remaining questions with their indices
         for q in unanswered_questions:
             bot_response_parts.append(f"{q.index}. {q.question}")
-        
+
         if all_answered:
             bot_response_parts.append("\nThank you! I have gathered all the necessary information.")
-        
+
         bot_response = "\n".join(bot_response_parts)
-    
+
     # Convert questions back to dicts
     questions_dicts = [q.to_dict() for q in questions]
-    
+
     # Update state
     updated_state = dict(state)
     updated_state["questions"] = questions_dicts
     updated_state["questioning"] = not all_answered  # Set to False when all answered
     updated_state["bot_response"] = bot_response
     updated_state["first_question_run_complete"] = first_question_run_complete
-    
+
     # Update conversation history
     # User input should already be added by detect_intent, but add it as a safety measure if missing
     updated_history = list(conversation_history)
     # Check if user input is already in history (should be the last message if added by detect_intent)
-    if not updated_history or not (isinstance(updated_history[-1], HumanMessage) and updated_history[-1].content == user_input):
+    if not updated_history or not (
+            isinstance(updated_history[-1], HumanMessage) and updated_history[-1].content == user_input):
         # User input not in history yet, add it
         updated_history.append(HumanMessage(content=user_input))
     # Always add bot response
     updated_history.append(AIMessage(content=bot_response))
     updated_state["conversation_history"] = updated_history
-    
+
     return updated_state
 
 
@@ -654,13 +724,13 @@ def create_ticket(state: AgentState) -> AgentState:
     conversation_history = state.get("conversation_history", [])
     last_cosmic_query = state.get("last_cosmic_query", "")
     user_input = state.get("user_input", "")
-    
+
     # Get user problem description
     user_problem = last_cosmic_query if last_cosmic_query else user_input
-    
+
     # Convert questions to Question objects
     questions = [Question.from_dict(q) for q in questions_data] if questions_data else []
-    
+
     # Generate ticket title using LLM
     system_prompt = """You are a ticket title generator. Your task is to create a concise, descriptive title for a support ticket.
 
@@ -678,13 +748,13 @@ Examples:
 - "patient registration error" -> "patient_registration_error"
 
 Return ONLY the title text, nothing else. No quotes, no explanation, just the title."""
-    
+
     # Build context for title generation
     context_parts = [f"Problem: {user_problem}"]
-    
+
     if matched_template:
         context_parts.append(f"Issue Category: {matched_template.get('issue_category', '')}")
-    
+
     # Add answered questions for context
     answered_questions = [q for q in questions if q.answered]
     if answered_questions:
@@ -692,20 +762,20 @@ Return ONLY the title text, nothing else. No quotes, no explanation, just the ti
         for q in answered_questions[:3]:  # Use first 3 answered questions
             if q.answer and q.answer != "unknown":
                 context_parts.append(f"- {q.answer}")
-    
+
     context = "\n".join(context_parts)
-    
+
     user_prompt = f"""Based on the following information, generate a concise ticket title:
 
 {context}
 
 Generate a short, descriptive title (3-10 words, use underscores instead of spaces)."""
-    
+
     messages = [
         SystemMessage(content=system_prompt),
         HumanMessage(content=user_prompt)
     ]
-    
+
     try:
         response = llm.invoke(messages)
         ticket_title = response.content.strip()
@@ -722,10 +792,10 @@ Generate a short, descriptive title (3-10 words, use underscores instead of spac
         if config.DEBUG:
             print(f"Title generation failed: {e}")
         ticket_title = "support_ticket"
-    
+
     # Generate UUID
     ticket_uuid = str(uuid.uuid4())
-    
+
     # Format conversation history as strings
     conversation_history_str = []
     for msg in conversation_history:
@@ -733,13 +803,13 @@ Generate a short, descriptive title (3-10 words, use underscores instead of spac
             conversation_history_str.append(f"User: {msg.content}")
         elif isinstance(msg, AIMessage):
             conversation_history_str.append(f"AI Assistant: {msg.content}")
-    
+
     # Add current user input if not already in history
     if user_input:
         user_input_str = f"User: {user_input}"
         if not any(msg == user_input_str for msg in conversation_history_str):
             conversation_history_str.append(user_input_str)
-    
+
     # Generate summary using LLM
     summary_prompt = """You are a ticket summary generator. Your task is to create a comprehensive summary of a support ticket based on:
 1. The user's problem description
@@ -757,7 +827,7 @@ Return ONLY the summary text, nothing else."""
 
     # Build context for summary generation
     summary_context_parts = [f"User Problem: {user_problem}"]
-    
+
     if questions:
         summary_context_parts.append("\nQuestions and Answers:")
         for q in questions:
@@ -765,18 +835,18 @@ Return ONLY the summary text, nothing else."""
                 answer_text = q.answer if q.answer != "unknown" else "User indicated they do not know"
                 summary_context_parts.append(f"Q: {q.question}")
                 summary_context_parts.append(f"A: {answer_text}")
-    
+
     summary_context_parts.append("\nConversation History:")
     summary_context_parts.append("\n".join(conversation_history_str))
-    
+
     summary_context = "\n".join(summary_context_parts)
-    
+
     summary_user_prompt = f"""Generate a comprehensive summary for this support ticket:
 
 {summary_context}
 
 Create a summary that includes all important details from the questions, answers, and conversation."""
-    
+
     try:
         summary_messages = [
             SystemMessage(content=summary_prompt),
@@ -793,16 +863,16 @@ Create a summary that includes all important details from the questions, answers
             answered = [q for q in questions if q.answered and q.answer and q.answer != "unknown"]
             if answered:
                 summary += "\n\nKey Information: " + "; ".join([q.answer for q in answered[:3]])
-    
+
     # Get values from matched template
     assigned_queue = matched_template.get("queue", "Technical Support")
     category = matched_template.get("issue_category", "")
     priority = "High"  # Hard coded
     name = "Love Noreus"  # Hard coded
-    
+
     # Format conversation history for Jira description
     conversation_history_formatted = "\n".join(conversation_history_str)
-    
+
     # Format description according to requirements
     ticket_title_display = ticket_title.replace("_", " ")
     description = f"""Summary:
@@ -832,7 +902,7 @@ Conversation Topic:
 Conversation History: 
 
 {conversation_history_formatted}"""
-    
+
     # Build ticket data
     ticket_data = {
         "ticket_title": ticket_title,
@@ -844,14 +914,14 @@ Conversation History:
         "questions": [q.to_dict() for q in questions],
         "conversation_history": conversation_history_str
     }
-    
+
     # Save ticket to file
     tickets_dir = Path(__file__).parent / "tickets"
     tickets_dir.mkdir(exist_ok=True)
-    
+
     filename = f"{ticket_title}_{ticket_uuid}.json"
     filepath = tickets_dir / filename
-    
+
     # Create Jira ticket
     jira_result = None
     try:
@@ -863,7 +933,7 @@ Conversation History:
             name=name,
             category=category
         )
-        
+
         if config.DEBUG:
             if jira_result.get("success"):
                 print(f"Jira ticket created: {jira_result.get('key', 'Unknown')}")
@@ -873,15 +943,15 @@ Conversation History:
         if config.DEBUG:
             print(f"Error creating Jira ticket: {e}")
         jira_result = {"success": False, "error": str(e)}
-    
+
     # Save JSON ticket to file
     try:
         with open(filepath, "w", encoding="utf-8") as f:
             json.dump(ticket_data, f, indent=2, ensure_ascii=False)
-        
+
         if config.DEBUG:
             print(f"Ticket saved to: {filepath}")
-        
+
         # Generate bot response
         jira_info = ""
         if jira_result and jira_result.get("success"):
@@ -889,19 +959,19 @@ Conversation History:
             jira_info = f"\nJira Ticket: {jira_key}"
         elif jira_result and not jira_result.get("success"):
             jira_info = f"\nJira Ticket: Failed to create ({jira_result.get('error', 'Unknown error')})"
-        
+
         bot_response = f"Ticket created successfully! Ticket ID: {ticket_uuid}\nTitle: {ticket_title_display.title()}\nSaved to: {filename}{jira_info}"
-        
+
     except Exception as e:
         if config.DEBUG:
             print(f"Error saving ticket: {e}")
         bot_response = f"Error creating ticket: {str(e)}"
-    
+
     # Reset state to initial state after ticket creation
     # The conversation history is already included in the ticket, so we can clear it completely
     updated_state = get_initial_state()
     updated_state["bot_response"] = bot_response
-    
+
     return updated_state
 
 
@@ -911,7 +981,7 @@ def route_after_intent(state: AgentState) -> str:
     mode = intent.get("mode", "cosmic_search")
     questioning = state.get("questioning", False)
     first_question_run_complete = state.get("first_question_run_complete", False)
-    
+
     # If create_ticket mode, only route to create_ticket if questions have been asked
     # Otherwise, route to start_ticket flow
     if mode == "create_ticket":
@@ -963,10 +1033,10 @@ workflow.add_conditional_edges(
 workflow.add_conditional_edges(
     "questioner_agent",
     lambda state: "create_ticket" if (
-        state.get("questions") and 
-        len(state.get("questions", [])) > 0 and
-        all(q.get("answered", False) for q in state.get("questions", [])) and
-        not state.get("questioning", True)  # questioning is False when all answered
+            state.get("questions") and
+            len(state.get("questions", [])) > 0 and
+            all(q.get("answered", False) for q in state.get("questions", [])) and
+            not state.get("questioning", True)  # questioning is False when all answered
     ) else END,
     {
         "create_ticket": "create_ticket",
@@ -1000,11 +1070,11 @@ def process_message(chat_id: str, user_message: str) -> dict:
     """
     Process a single user message and return bot response.
     This function can be imported and used by external libraries (e.g., MCP server).
-    
+
     Args:
         chat_id: Unique identifier for the conversation thread
         user_message: The user's message to process
-    
+
     Returns:
         dict: Response containing:
             - success: bool
@@ -1017,9 +1087,9 @@ def process_message(chat_id: str, user_message: str) -> dict:
     # Initialize or get conversation state
     if chat_id not in _conversation_states:
         _conversation_states[chat_id] = get_initial_state()
-    
+
     global_state = _conversation_states[chat_id]
-    
+
     if not user_message or not user_message.strip():
         return {
             "success": False,
@@ -1027,9 +1097,9 @@ def process_message(chat_id: str, user_message: str) -> dict:
             "ticket_mode": global_state.get("questioning", False),
             "ticket_ready": False
         }
-    
+
     user_input = user_message.strip()
-    
+
     try:
         # Prepare state for this invocation (merge with global state)
         current_state = {
@@ -1043,14 +1113,14 @@ def process_message(chat_id: str, user_message: str) -> dict:
             "questions": global_state.get("questions", []),
             "first_question_run_complete": global_state.get("first_question_run_complete", False)
         }
-        
+
         # Preserve matched_template if it exists
         if "matched_template" in global_state:
             current_state["matched_template"] = global_state["matched_template"]
-        
+
         # Run the graph
         result = app.invoke(current_state)
-        
+
         # Update global state with the result
         _conversation_states[chat_id].update({
             "conversation_history": result.get("conversation_history", []),
@@ -1062,27 +1132,27 @@ def process_message(chat_id: str, user_message: str) -> dict:
             "questions": result.get("questions", []),
             "first_question_run_complete": result.get("first_question_run_complete", False)
         })
-        
+
         # Preserve matched_template if it exists
         if "matched_template" in result:
             _conversation_states[chat_id]["matched_template"] = result["matched_template"]
-        
+
         # Get bot response
         bot_response = result.get("bot_response")
         if not bot_response:
             # Fallback if no agent set a response
             intent = result.get("intent", {})
             bot_response = json.dumps(intent)
-        
+
         # Determine ticket mode and status
         questioning = result.get("questioning", False)
         questions = result.get("questions", [])
         ticket_ready = False
-        
+
         if questions:
             all_answered = all(q.get("answered", False) for q in questions)
             ticket_ready = all_answered and result.get("first_question_run_complete", False)
-        
+
         # Build response
         response = {
             "success": True,
@@ -1090,16 +1160,16 @@ def process_message(chat_id: str, user_message: str) -> dict:
             "ticket_mode": questioning,
             "ticket_ready": ticket_ready
         }
-        
+
         # Add question information if in ticket mode
         if questioning and questions:
             response["questions"] = questions
             answered_questions = [q for q in questions if q.get("answered", False)]
             response["answered_questions"] = answered_questions
             response["unanswered_questions"] = [q for q in questions if not q.get("answered", False)]
-        
+
         return response
-        
+
     except Exception as e:
         if config.DEBUG:
             import traceback
@@ -1116,10 +1186,10 @@ def process_message(chat_id: str, user_message: str) -> dict:
 def reset_conversation(chat_id: str) -> bool:
     """
     Reset a conversation state to initial state.
-    
+
     Args:
         chat_id: Unique identifier for the conversation thread
-    
+
     Returns:
         bool: True if conversation was reset, False if conversation didn't exist
     """
@@ -1132,30 +1202,30 @@ def reset_conversation(chat_id: str) -> bool:
 def main():
     """Main loop for terminal interaction"""
     print("Intent Detection Bot - Type 'exit' to quit\n")
-    
+
     # Use a default chat_id for terminal mode
     terminal_chat_id = "terminal_session"
-    
+
     while True:
         try:
             user_input = input("You: ").strip()
-            
+
             if user_input.lower() in ['exit', 'quit', 'q']:
                 print("Goodbye!")
                 break
-            
+
             if not user_input:
                 continue
-            
+
             # Start timing
             start_time = time.time()
-            
+
             # Process message using the process_message function
             result = process_message(terminal_chat_id, user_input)
-            
+
             # Calculate response time
             response_time = time.time() - start_time
-            
+
             # Display bot response
             if result.get("success"):
                 bot_response = result.get("message", "")
@@ -1163,13 +1233,12 @@ def main():
             else:
                 error_msg = result.get("message", "Unknown error")
                 print(f"\nError: {error_msg} ({response_time:.3f}s)\n")
-            
+
         except KeyboardInterrupt:
             print("\nGoodbye!")
             break
         except Exception as e:
             print(f"Error: {e}\n")
-        
 
 
 if __name__ == "__main__":

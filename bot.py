@@ -14,6 +14,7 @@ from dotenv import load_dotenv
 from utils import parse_json_from_response
 import sys
 from pathlib import Path
+import logging
 
 # Add tools directory to path for imports
 sys.path.insert(0, str(Path(__file__).parent / "tools"))
@@ -23,16 +24,47 @@ from jira_ticket_tool import create_jira_ticket
 
 load_dotenv()
 
+# ============================================================================
+# LOGGING CONFIGURATION
+# ============================================================================
+
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.StreamHandler(sys.stdout)
+    ],
+    force=True
+)
+
+logger = logging.getLogger(__name__)
+
+# Set appropriate log levels for noisy libraries
+logging.getLogger('httpx').setLevel(logging.WARNING)
+logging.getLogger('httpcore').setLevel(logging.WARNING)
+logging.getLogger('openai').setLevel(logging.WARNING)
+logging.getLogger('langchain').setLevel(logging.WARNING)
+logging.getLogger('langchain_core').setLevel(logging.WARNING)
+logging.getLogger('langgraph').setLevel(logging.WARNING)
+
+# ============================================================================
+# LLM INITIALIZATION
+# ============================================================================
+
 # Initialize the LLM
 llm = ChatOpenAI(
     model=os.getenv("AGENT_MODEL_NAME", "gpt-4o-mini"),
     temperature=0
 )
 
+logger.info(f"LLM initialized with model: {os.getenv('AGENT_MODEL_NAME', 'gpt-4o-mini')}")
+
 # Load known questions
 KNOWN_QUESTIONS_PATH = Path(__file__).parent / "known_questions.json"
 with open(KNOWN_QUESTIONS_PATH, "r", encoding="utf8") as f:
     KNOWN_QUESTIONS = json.load(f)
+
+logger.info(f"Loaded {len(KNOWN_QUESTIONS)} known question templates from {KNOWN_QUESTIONS_PATH}")
 
 
 @dataclass
@@ -76,27 +108,37 @@ class AgentState(TypedDict):
 
 def detect_intent(state: AgentState) -> AgentState:
     """Detect user intent from input"""
+    logger.info("=" * 80)
+    logger.info("DETECT INTENT AGENT")
+    logger.info("=" * 80)
+
     user_input = state["user_input"]
     conversation_history = state.get("conversation_history", [])
     questioning = state.get("questioning", False)
     questions = state.get("questions", [])
 
+    logger.debug(f"User input: {user_input[:100]}...")
+    logger.debug(f"Questioning mode: {questioning}")
+    logger.debug(f"Number of questions: {len(questions)}")
+
     # Check if all questions are answered
     all_answered = False
     if questions:
         all_answered = all(q.get("answered", False) for q in questions)
+        logger.debug(f"All questions answered: {all_answered}")
 
     first_question_run_complete = state.get("first_question_run_complete", False)
+    logger.debug(f"First question run complete: {first_question_run_complete}")
 
     # If all questions are answered AND questions have been asked at least once, route to create_ticket
     if questions and all_answered and first_question_run_complete:
-        # Add user input to conversation history before routing
+        logger.info("Routing to create_ticket - all questions answered")
         updated_history = conversation_history + [HumanMessage(content=user_input)]
         return {"intent": {"mode": "create_ticket"}, "conversation_history": updated_history}
 
     # If questioning is active, route to questioner_agent
     if questioning:
-        # Add user input to conversation history before routing
+        logger.info("Routing to questioner_agent - questioning mode active")
         updated_history = conversation_history + [HumanMessage(content=user_input)]
         return {"intent": {"mode": "questioning"}, "conversation_history": updated_history}
 
@@ -144,13 +186,15 @@ Return ONLY the JSON, nothing else."""
     # Add current user input
     messages.append(HumanMessage(content=user_input))
 
+    logger.debug("Invoking LLM for intent detection")
     response = llm.invoke(messages)
     response_text = response.content.strip()
+    logger.debug(f"LLM response: {response_text[:200]}...")
 
     # Parse JSON from response using utility function
     intent = parse_json_from_response(response_text)
 
-    print(f'This is the intent: {intent}')
+    logger.info(f"Detected intent: {intent}")
 
     # Update conversation history with new messages
     updated_history = conversation_history + [
@@ -158,18 +202,26 @@ Return ONLY the JSON, nothing else."""
         AIMessage(content=json.dumps(intent))
     ]
 
+    logger.info(f"Intent detection complete. Mode: {intent.get('mode', 'unknown')}")
     return {"intent": intent, "conversation_history": updated_history}
 
 
 def cosmic_search_agent(state: AgentState) -> AgentState:
     """Cosmic search agent that handles cosmic_search mode"""
+    logger.info("=" * 80)
+    logger.info("COSMIC SEARCH AGENT")
+    logger.info("=" * 80)
+
     # Extract the cosmic query from user input
     user_input = state.get("user_input", "")
     conversation_history = state.get("conversation_history", [])
     last_cosmic_query = user_input
 
+    logger.info(f"Cosmic search query: {last_cosmic_query[:100]}...")
+
     # Call the cosmic database tool (async function, run in sync context)
     # Use configuration values from config
+    logger.debug(f"Calling cosmic_database_tool2 with collection: {config.COSMIC_DATABASE_COLLECTION_NAME}")
     tool_result = asyncio.run(cosmic_database_tool2(
         query=last_cosmic_query,
         collection_name=config.COSMIC_DATABASE_COLLECTION_NAME,
@@ -187,6 +239,9 @@ def cosmic_search_agent(state: AgentState) -> AgentState:
     # If no message, use the full tool result as fallback
     if not bot_response:
         bot_response = 'I am sorry, I could not find any information on that topic.'
+        logger.warning("No message found in tool result, using fallback response")
+    else:
+        logger.info(f"Cosmic search response generated. Length: {len(bot_response)} characters")
 
     # Update conversation history
     updated_history = list(conversation_history)
@@ -198,6 +253,8 @@ def cosmic_search_agent(state: AgentState) -> AgentState:
     # Add the cosmic search response
     updated_history.append(AIMessage(content=bot_response))
 
+    logger.debug(f"Conversation history updated. Total messages: {len(updated_history)}")
+
     # Return the full modified state
     updated_state = dict(state)
     updated_state["last_cosmic_query"] = last_cosmic_query
@@ -205,11 +262,16 @@ def cosmic_search_agent(state: AgentState) -> AgentState:
     updated_state["bot_response"] = bot_response
     updated_state["conversation_history"] = updated_history
 
+    logger.info("Cosmic search agent completed successfully")
     return updated_state
 
 
 def identify_known_question_agent(state: AgentState) -> AgentState:
     """Identify the most appropriate problem template from known_questions.json"""
+    logger.info("=" * 80)
+    logger.info("IDENTIFY KNOWN QUESTION AGENT")
+    logger.info("=" * 80)
+
     # Get the user problem from last cosmic query
     user_problem = state.get("last_cosmic_query", "")
 
@@ -217,11 +279,15 @@ def identify_known_question_agent(state: AgentState) -> AgentState:
         # If no last cosmic query, use current user input
         user_problem = state.get("user_input", "")
 
+    logger.info(f"User problem: {user_problem[:100]}...")
+
     # Get conversation history to provide more context
     conversation_history = state.get("conversation_history", [])
 
     # Extract the latest 10 entries from conversation history
     recent_history = conversation_history[-10:] if len(conversation_history) > 10 else conversation_history
+
+    logger.debug(f"Using {len(recent_history)} recent conversation messages for context")
 
     # Format conversation history for context
     conversation_context = ""
@@ -235,6 +301,7 @@ def identify_known_question_agent(state: AgentState) -> AgentState:
 
     if not user_problem and not conversation_context:
         # No problem to match, return unchanged
+        logger.warning("No problem description found")
         updated_state = dict(state)
         updated_state["known_problem_identified"] = False
         updated_state["bot_response"] = (
@@ -264,6 +331,8 @@ def identify_known_question_agent(state: AgentState) -> AgentState:
             "text": template.get("text", "")
         }
         templates_summary.append(template_info)
+
+    logger.debug(f"Matching against {len(templates_summary)} templates")
 
     # Create prompt for matching
     system_prompt = """You are a problem classification agent. Your task is to match a user's problem description to the most appropriate problem template from a list of known issue categories.
@@ -318,8 +387,10 @@ Analyze the user's problem (considering both current message and conversation hi
         HumanMessage(content=user_prompt)
     ]
 
+    logger.debug("Invoking LLM for template matching")
     response = llm.invoke(messages)
     response_text = response.content.strip()
+    logger.debug(f"LLM response: {response_text[:200]}...")
 
     # Parse the response
     try:
@@ -327,16 +398,20 @@ Analyze the user's problem (considering both current message and conversation hi
                                                                         "reasoning": "Failed to parse response"})
         matched_index = match_result.get("matched_index", -1)
         confidence = match_result.get("confidence", 0.0)
-        if config.DEBUG:
-            print(f"Matched index: {matched_index}")
-            print(f"Confidence: {confidence}")
-            print(f"Reasoning: {match_result.get('reasoning', 'No reasoning provided')}")
+        reasoning = match_result.get('reasoning', 'No reasoning provided')
+
+        logger.info(f"Match result - Index: {matched_index}, Confidence: {confidence}")
+        logger.debug(f"Reasoning: {reasoning}")
 
         # If we have a valid match with reasonable confidence
         if matched_index >= 0 and matched_index < len(KNOWN_QUESTIONS) and confidence >= 0.5:
             matched_template = KNOWN_QUESTIONS[matched_index]
+            logger.info(f"Successfully matched template: {matched_template.get('issue_category', 'Unknown')}")
+
             # Initialize questions from the matched template
             questions_to_ask = matched_template.get("questions_to_ask", [])
+            logger.debug(f"Initializing {len(questions_to_ask)} questions")
+
             questions = []
             for idx, question_text in enumerate(questions_to_ask, start=1):
                 questions.append(Question(
@@ -353,9 +428,12 @@ Analyze the user's problem (considering both current message and conversation hi
             updated_state["match_confidence"] = confidence
             updated_state["questions"] = questions
             updated_state["questioning"] = True  # Start questioning process
+
+            logger.info("Questioning mode activated")
             return updated_state
         else:
             # Low confidence or no match
+            logger.warning(f"Low confidence match or no match found (confidence: {confidence})")
             updated_state = dict(state)
             updated_state["known_problem_identified"] = False
             updated_state["match_confidence"] = confidence
@@ -379,6 +457,7 @@ Analyze the user's problem (considering both current message and conversation hi
             return updated_state
     except Exception as e:
         # Error in matching
+        logger.error(f"Error in template matching: {e}", exc_info=True)
         updated_state = dict(state)
         updated_state["known_problem_identified"] = False
         updated_state["match_error"] = str(e)
@@ -399,6 +478,10 @@ Analyze the user's problem (considering both current message and conversation hi
 
 def questioner_agent(state: AgentState) -> AgentState:
     """Questioner agent that gathers answers for ticket creation questions"""
+    logger.info("=" * 80)
+    logger.info("QUESTIONER AGENT")
+    logger.info("=" * 80)
+
     questions_data = state.get("questions", [])
     user_input = state.get("user_input", "")
     conversation_history = state.get("conversation_history", [])
@@ -406,8 +489,13 @@ def questioner_agent(state: AgentState) -> AgentState:
     matched_template = state.get("matched_template", {})
     first_question_run_complete = state.get("first_question_run_complete", False)
 
+    logger.debug(f"Total questions: {len(questions_data)}")
+    logger.debug(f"First run complete: {first_question_run_complete}")
+    logger.debug(f"User input: {user_input[:100]}...")
+
     # If no questions initialized, return error state
     if not questions_data:
+        logger.error("No questions initialized")
         updated_state = dict(state)
         updated_state["bot_response"] = "Error: No questions initialized. Please start ticket creation again."
         updated_state["questioning"] = False
@@ -416,11 +504,16 @@ def questioner_agent(state: AgentState) -> AgentState:
     # Convert question dicts to Question objects
     questions = [Question.from_dict(q) for q in questions_data]
 
+    answered_count = sum(1 for q in questions if q.answered)
+    logger.info(f"Questions status: {answered_count}/{len(questions)} answered")
+
     # Get user problem description
     user_problem = last_cosmic_query if last_cosmic_query else user_input
 
     # First run: scan conversation history and current input, return full formatted response
     if not first_question_run_complete:
+        logger.info("First question run - scanning conversation history")
+
         # First, scan conversation history for answers
         if not any(q.answered for q in questions):
             # Extract conversation text for analysis
@@ -433,6 +526,7 @@ def questioner_agent(state: AgentState) -> AgentState:
 
             # Use LLM to extract answers from conversation history
             if conversation_text:
+                logger.debug("Analyzing conversation history for pre-answered questions")
                 system_prompt = """You are an information extraction agent. Your task is to identify which questions have already been answered in the conversation history.
 
 You will be given:
@@ -468,24 +562,32 @@ Analyze the conversation and identify which questions have been answered. Return
                 ]
 
                 try:
+                    logger.debug("Invoking LLM for history analysis")
                     response = llm.invoke(messages)
                     response_text = response.content.strip()
                     history_answers = parse_json_from_response(response_text, default={"answers": []})
 
                     # Update questions with answers from history
+                    history_answer_count = 0
                     for answer_info in history_answers.get("answers", []):
                         q_idx = answer_info.get("question_index", 0)
                         if 1 <= q_idx <= len(questions):
                             questions[q_idx - 1].answered = answer_info.get("answered", False)
                             if answer_info.get("answered"):
                                 questions[q_idx - 1].answer = answer_info.get("answer", None)
+                                history_answer_count += 1
+
+                    logger.info(f"Extracted {history_answer_count} answers from conversation history")
                 except Exception as e:
+                    logger.warning(f"Failed to extract answers from history: {e}")
                     # If extraction fails, continue without history answers
                     pass
 
         # Now process current user input for answers (only if we have unanswered questions)
         unanswered_before = [q for q in questions if not q.answered]
         if user_input and unanswered_before:
+            logger.debug(f"Processing current input for {len(unanswered_before)} unanswered questions")
+
             # Use LLM to extract answers from current user input
             unanswered_questions = [q for q in questions if not q.answered]
             if unanswered_questions:
@@ -537,27 +639,36 @@ Analyze the user's message and identify which questions they are answering. Retu
                 ]
 
                 try:
+                    logger.debug("Invoking LLM for current input analysis")
                     response = llm.invoke(messages)
                     response_text = response.content.strip()
                     current_answers = parse_json_from_response(response_text, default={"answers": []})
 
                     # Update questions with answers from current input
+                    current_answer_count = 0
                     for answer_info in current_answers.get("answers", []):
                         q_idx = answer_info.get("question_index", 0)
                         if 1 <= q_idx <= len(questions):
                             questions[q_idx - 1].answered = answer_info.get("answered", False)
                             if answer_info.get("answered"):
                                 questions[q_idx - 1].answer = answer_info.get("answer", None)
+                                current_answer_count += 1
+
+                    logger.info(f"Extracted {current_answer_count} answers from current input")
                 except Exception as e:
+                    logger.warning(f"Failed to extract answers from current input: {e}")
                     # If extraction fails, continue
                     pass
 
         # Check if all questions are answered
         all_answered = all(q.answered for q in questions)
+        logger.info(f"All questions answered: {all_answered}")
 
         # Build bot response - FULL FORMAT for first run
         answered_questions = [q for q in questions if q.answered]
         unanswered_questions = [q for q in questions if not q.answered]
+
+        logger.debug(f"Building response - {len(answered_questions)} answered, {len(unanswered_questions)} unanswered")
 
         bot_response_parts = []
 
@@ -587,11 +698,16 @@ Analyze the user's message and identify which questions they are answering. Retu
 
         # Mark first run as complete
         first_question_run_complete = True
+        logger.info("First question run completed")
 
     else:
+        logger.info("Subsequent question run - processing user input only")
+
         # Subsequent runs: only process current user input, return simpler response
         unanswered_before = [q for q in questions if not q.answered]
         if user_input and unanswered_before:
+            logger.debug(f"Processing {len(unanswered_before)} unanswered questions")
+
             # Use LLM to extract answers from current user input
             unanswered_questions = [q for q in questions if not q.answered]
             if unanswered_questions:
@@ -643,26 +759,35 @@ Analyze the user's message and identify which questions they are answering. Retu
                 ]
 
                 try:
+                    logger.debug("Invoking LLM for answer extraction")
                     response = llm.invoke(messages)
                     response_text = response.content.strip()
                     current_answers = parse_json_from_response(response_text, default={"answers": []})
 
                     # Update questions with answers from current input
+                    answer_count = 0
                     for answer_info in current_answers.get("answers", []):
                         q_idx = answer_info.get("question_index", 0)
                         if 1 <= q_idx <= len(questions):
                             questions[q_idx - 1].answered = answer_info.get("answered", False)
                             if answer_info.get("answered"):
                                 questions[q_idx - 1].answer = answer_info.get("answer", None)
+                                answer_count += 1
+
+                    logger.info(f"Extracted {answer_count} answers from user input")
                 except Exception as e:
+                    logger.warning(f"Failed to extract answers: {e}")
                     # If extraction fails, continue
                     pass
 
         # Check if all questions are answered
         all_answered = all(q.answered for q in questions)
+        logger.info(f"All questions answered: {all_answered}")
 
         # Build bot response - SIMPLER FORMAT for subsequent runs
         unanswered_questions = [q for q in questions if not q.answered]
+
+        logger.debug(f"Remaining unanswered questions: {len(unanswered_questions)}")
 
         # Generate varied intro message
         import random
@@ -702,6 +827,8 @@ Analyze the user's message and identify which questions they are answering. Retu
     updated_state["bot_response"] = bot_response
     updated_state["first_question_run_complete"] = first_question_run_complete
 
+    logger.debug(f"Questioning mode: {updated_state['questioning']}")
+
     # Update conversation history
     # User input should already be added by detect_intent, but add it as a safety measure if missing
     updated_history = list(conversation_history)
@@ -714,11 +841,16 @@ Analyze the user's message and identify which questions they are answering. Retu
     updated_history.append(AIMessage(content=bot_response))
     updated_state["conversation_history"] = updated_history
 
+    logger.info("Questioner agent completed")
     return updated_state
 
 
 def create_ticket(state: AgentState) -> AgentState:
     """Create ticket agent that generates ticket title and saves ticket JSON file"""
+    logger.info("=" * 80)
+    logger.info("CREATE TICKET AGENT")
+    logger.info("=" * 80)
+
     questions_data = state.get("questions", [])
     matched_template = state.get("matched_template", {})
     conversation_history = state.get("conversation_history", [])
@@ -727,11 +859,15 @@ def create_ticket(state: AgentState) -> AgentState:
 
     # Get user problem description
     user_problem = last_cosmic_query if last_cosmic_query else user_input
+    logger.info(f"Creating ticket for problem: {user_problem[:100]}...")
 
     # Convert questions to Question objects
     questions = [Question.from_dict(q) for q in questions_data] if questions_data else []
+    answered_count = sum(1 for q in questions if q.answered)
+    logger.debug(f"Questions: {answered_count}/{len(questions)} answered")
 
     # Generate ticket title using LLM
+    logger.debug("Generating ticket title")
     system_prompt = """You are a ticket title generator. Your task is to create a concise, descriptive title for a support ticket.
 
 The title should:
@@ -787,14 +923,15 @@ Generate a short, descriptive title (3-10 words, use underscores instead of spac
         # Ensure it's not empty
         if not ticket_title:
             ticket_title = "support_ticket"
+        logger.info(f"Generated ticket title: {ticket_title}")
     except Exception as e:
         # Fallback title
-        if config.DEBUG:
-            print(f"Title generation failed: {e}")
+        logger.error(f"Title generation failed: {e}", exc_info=True)
         ticket_title = "support_ticket"
 
     # Generate UUID
     ticket_uuid = str(uuid.uuid4())
+    logger.info(f"Generated ticket UUID: {ticket_uuid}")
 
     # Format conversation history as strings
     conversation_history_str = []
@@ -810,7 +947,10 @@ Generate a short, descriptive title (3-10 words, use underscores instead of spac
         if not any(msg == user_input_str for msg in conversation_history_str):
             conversation_history_str.append(user_input_str)
 
+    logger.debug(f"Conversation history: {len(conversation_history_str)} messages")
+
     # Generate summary using LLM
+    logger.debug("Generating ticket summary")
     summary_prompt = """You are a ticket summary generator. Your task is to create a comprehensive summary of a support ticket based on:
 1. The user's problem description
 2. Questions asked and their answers
@@ -854,9 +994,9 @@ Create a summary that includes all important details from the questions, answers
         ]
         summary_response = llm.invoke(summary_messages)
         summary = summary_response.content.strip()
+        logger.info(f"Generated summary: {len(summary)} characters")
     except Exception as e:
-        if config.DEBUG:
-            print(f"Summary generation failed: {e}")
+        logger.error(f"Summary generation failed: {e}", exc_info=True)
         # Fallback summary
         summary = user_problem
         if questions:
@@ -869,6 +1009,8 @@ Create a summary that includes all important details from the questions, answers
     category = matched_template.get("issue_category", "")
     priority = "High"  # Hard coded
     name = "Love Noreus"  # Hard coded
+
+    logger.debug(f"Ticket details - Queue: {assigned_queue}, Category: {category}, Priority: {priority}")
 
     # Format conversation history for Jira description
     conversation_history_formatted = "\n".join(conversation_history_str)
@@ -922,9 +1064,12 @@ Conversation History:
     filename = f"{ticket_title}_{ticket_uuid}.json"
     filepath = tickets_dir / filename
 
+    logger.info(f"Saving ticket to: {filepath}")
+
     # Create Jira ticket
     jira_result = None
     try:
+        logger.info("Creating Jira ticket")
         jira_result = create_jira_ticket(
             conversation_topic=ticket_title_display,
             description=description,
@@ -934,14 +1079,12 @@ Conversation History:
             category=category
         )
 
-        if config.DEBUG:
-            if jira_result.get("success"):
-                print(f"Jira ticket created: {jira_result.get('key', 'Unknown')}")
-            else:
-                print(f"Jira ticket creation failed: {jira_result.get('error', 'Unknown error')}")
+        if jira_result.get("success"):
+            logger.info(f"Jira ticket created successfully: {jira_result.get('key', 'Unknown')}")
+        else:
+            logger.error(f"Jira ticket creation failed: {jira_result.get('error', 'Unknown error')}")
     except Exception as e:
-        if config.DEBUG:
-            print(f"Error creating Jira ticket: {e}")
+        logger.error(f"Error creating Jira ticket: {e}", exc_info=True)
         jira_result = {"success": False, "error": str(e)}
 
     # Save JSON ticket to file
@@ -949,8 +1092,7 @@ Conversation History:
         with open(filepath, "w", encoding="utf-8") as f:
             json.dump(ticket_data, f, indent=2, ensure_ascii=False)
 
-        if config.DEBUG:
-            print(f"Ticket saved to: {filepath}")
+        logger.info(f"Ticket saved successfully to: {filepath}")
 
         # Generate bot response
         jira_info = ""
@@ -963,15 +1105,16 @@ Conversation History:
         bot_response = f"Ticket created successfully! Ticket ID: {ticket_uuid}\nTitle: {ticket_title_display.title()}\nSaved to: {filename}{jira_info}"
 
     except Exception as e:
-        if config.DEBUG:
-            print(f"Error saving ticket: {e}")
+        logger.error(f"Error saving ticket: {e}", exc_info=True)
         bot_response = f"Error creating ticket: {str(e)}"
 
     # Reset state to initial state after ticket creation
     # The conversation history is already included in the ticket, so we can clear it completely
+    logger.info("Resetting conversation state after ticket creation")
     updated_state = get_initial_state()
     updated_state["bot_response"] = bot_response
 
+    logger.info("Ticket creation completed successfully")
     return updated_state
 
 
@@ -982,25 +1125,43 @@ def route_after_intent(state: AgentState) -> str:
     questioning = state.get("questioning", False)
     first_question_run_complete = state.get("first_question_run_complete", False)
 
+    logger.debug(
+        f"Routing - Mode: {mode}, Questioning: {questioning}, First run complete: {first_question_run_complete}")
+
     # If create_ticket mode, only route to create_ticket if questions have been asked
     # Otherwise, route to start_ticket flow
     if mode == "create_ticket":
         if first_question_run_complete:
+            logger.info("Routing to: create_ticket")
             return "create_ticket"
         else:
             # User wants to create ticket but questions haven't been asked yet
             # Route to start_ticket flow instead
+            logger.info(
+                "Routing to: identify_known_question_agent (create_ticket requested but questions not initialized)")
             return "identify_known_question_agent"
     # If questioning is active, always route to questioner_agent
     elif questioning or mode == "questioning":
+        logger.info("Routing to: questioner_agent")
         return "questioner_agent"
     elif mode == "cosmic_search":
+        logger.info("Routing to: cosmic_search_agent")
         return "cosmic_search_agent"
     elif mode == "start_ticket":
+        logger.info("Routing to: identify_known_question_agent")
         return "identify_known_question_agent"
     else:
+        logger.info("Routing to: END")
         return END
 
+
+# ============================================================================
+# LANGGRAPH WORKFLOW SETUP
+# ============================================================================
+
+logger.info("=" * 80)
+logger.info("BUILDING LANGGRAPH WORKFLOW")
+logger.info("=" * 80)
 
 # Create the graph
 workflow = StateGraph(AgentState)
@@ -1048,6 +1209,10 @@ workflow.add_edge("create_ticket", END)
 # Compile the graph
 app = workflow.compile()
 
+logger.info("Workflow compiled successfully")
+logger.info("Nodes: detect_intent, cosmic_search_agent, identify_known_question_agent, questioner_agent, create_ticket")
+logger.info("=" * 80)
+
 # Global state storage for multiple conversations (keyed by chat_id)
 _conversation_states: Dict[str, dict] = {}
 
@@ -1084,13 +1249,21 @@ def process_message(chat_id: str, user_message: str) -> dict:
             - questions: list (current questions if in ticket mode)
             - answered_questions: list (answered questions if in ticket mode)
     """
+    logger.info("=" * 80)
+    logger.info(f"PROCESSING MESSAGE - Chat ID: {chat_id}")
+    logger.info("=" * 80)
+
     # Initialize or get conversation state
     if chat_id not in _conversation_states:
+        logger.info(f"Initializing new conversation state for chat_id: {chat_id}")
         _conversation_states[chat_id] = get_initial_state()
+    else:
+        logger.debug(f"Using existing conversation state for chat_id: {chat_id}")
 
     global_state = _conversation_states[chat_id]
 
     if not user_message or not user_message.strip():
+        logger.warning("Empty user message received")
         return {
             "success": False,
             "message": "Please provide a message to process.",
@@ -1099,6 +1272,7 @@ def process_message(chat_id: str, user_message: str) -> dict:
         }
 
     user_input = user_message.strip()
+    logger.info(f"User message: {user_input[:100]}...")
 
     try:
         # Prepare state for this invocation (merge with global state)
@@ -1118,8 +1292,15 @@ def process_message(chat_id: str, user_message: str) -> dict:
         if "matched_template" in global_state:
             current_state["matched_template"] = global_state["matched_template"]
 
+        logger.debug(
+            f"Current state - Questioning: {current_state['questioning']}, Questions: {len(current_state['questions'])}")
+
         # Run the graph
+        logger.info("Invoking LangGraph workflow")
+        start_time = time.time()
         result = app.invoke(current_state)
+        elapsed_time = time.time() - start_time
+        logger.info(f"Workflow completed in {elapsed_time:.2f}s")
 
         # Update global state with the result
         _conversation_states[chat_id].update({
@@ -1137,12 +1318,15 @@ def process_message(chat_id: str, user_message: str) -> dict:
         if "matched_template" in result:
             _conversation_states[chat_id]["matched_template"] = result["matched_template"]
 
+        logger.debug("Global state updated successfully")
+
         # Get bot response
         bot_response = result.get("bot_response")
         if not bot_response:
             # Fallback if no agent set a response
             intent = result.get("intent", {})
             bot_response = json.dumps(intent)
+            logger.warning("No bot_response found, using intent as fallback")
 
         # Determine ticket mode and status
         questioning = result.get("questioning", False)
@@ -1152,6 +1336,7 @@ def process_message(chat_id: str, user_message: str) -> dict:
         if questions:
             all_answered = all(q.get("answered", False) for q in questions)
             ticket_ready = all_answered and result.get("first_question_run_complete", False)
+            logger.debug(f"Ticket status - All answered: {all_answered}, Ready: {ticket_ready}")
 
         # Build response
         response = {
@@ -1163,17 +1348,21 @@ def process_message(chat_id: str, user_message: str) -> dict:
 
         # Add question information if in ticket mode
         if questioning and questions:
-            response["questions"] = questions
             answered_questions = [q for q in questions if q.get("answered", False)]
-            response["answered_questions"] = answered_questions
-            response["unanswered_questions"] = [q for q in questions if not q.get("answered", False)]
+            unanswered_questions = [q for q in questions if not q.get("answered", False)]
 
+            response["questions"] = questions
+            response["answered_questions"] = answered_questions
+            response["unanswered_questions"] = unanswered_questions
+
+            logger.debug(
+                f"Questions - Total: {len(questions)}, Answered: {len(answered_questions)}, Unanswered: {len(unanswered_questions)}")
+
+        logger.info(f"Message processed successfully - Ticket mode: {questioning}, Ticket ready: {ticket_ready}")
         return response
 
     except Exception as e:
-        if config.DEBUG:
-            import traceback
-            traceback.print_exc()
+        logger.error(f"Error processing message: {e}", exc_info=True)
         return {
             "success": False,
             "message": f"An error occurred: {str(e)}",
@@ -1193,24 +1382,34 @@ def reset_conversation(chat_id: str) -> bool:
     Returns:
         bool: True if conversation was reset, False if conversation didn't exist
     """
+    logger.info(f"Resetting conversation for chat_id: {chat_id}")
+
     if chat_id in _conversation_states:
         _conversation_states[chat_id] = get_initial_state()
+        logger.info(f"Conversation {chat_id} reset successfully")
         return True
+
+    logger.warning(f"Conversation {chat_id} not found")
     return False
 
 
 def main():
     """Main loop for terminal interaction"""
+    logger.info("=" * 80)
+    logger.info("STARTING TERMINAL INTERACTION MODE")
+    logger.info("=" * 80)
     print("Intent Detection Bot - Type 'exit' to quit\n")
 
     # Use a default chat_id for terminal mode
     terminal_chat_id = "terminal_session"
+    logger.info(f"Terminal chat_id: {terminal_chat_id}")
 
     while True:
         try:
             user_input = input("You: ").strip()
 
             if user_input.lower() in ['exit', 'quit', 'q']:
+                logger.info("User requested exit")
                 print("Goodbye!")
                 break
 
@@ -1230,14 +1429,18 @@ def main():
             if result.get("success"):
                 bot_response = result.get("message", "")
                 print(f"\nBot: {bot_response} ({response_time:.3f}s)\n")
+                logger.debug(f"Response time: {response_time:.3f}s")
             else:
                 error_msg = result.get("message", "Unknown error")
                 print(f"\nError: {error_msg} ({response_time:.3f}s)\n")
+                logger.error(f"Error displayed to user: {error_msg}")
 
         except KeyboardInterrupt:
+            logger.info("Keyboard interrupt received")
             print("\nGoodbye!")
             break
         except Exception as e:
+            logger.error(f"Unexpected error in main loop: {e}", exc_info=True)
             print(f"Error: {e}\n")
 
 

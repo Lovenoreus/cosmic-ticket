@@ -215,6 +215,8 @@ async def send_message(request: MessageRequest):
             error=result.get("error")
         )
 
+        logger.info(f"Full Response: {response}")
+
         return response
 
     except Exception as e:

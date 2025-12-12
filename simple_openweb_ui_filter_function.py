@@ -1,6 +1,6 @@
 """
 title: FastAPI Support Ticket Bot Filter
-version: 0.5
+version: 0.7
 """
 
 from pydantic import BaseModel
@@ -14,15 +14,21 @@ class Filter:
         fastapi_bot_url: str = "http://host.docker.internal:8500"
         chat_id: str = "123"
         debug: bool = True
+        stream_speed: int = 1  # Characters to stream per chunk (1 = one char at a time)
 
     class UserValves(BaseModel):
         pass
 
     def __init__(self):
         self.valves = self.Valves()
+
         # Store bot responses per message AND keep latest response
         self.bot_responses = {}
         self.latest_response = None  # Fallback for message_id mismatch
+
+        # Track streaming position for each message
+        self.stream_positions = {}
+
         print("=" * 60)
         print("FASTAPI BOT FILTER INITIALIZED")
         print(f"FastAPI Bot URL: {self.valves.fastapi_bot_url}")
@@ -98,16 +104,20 @@ class Filter:
                     self.bot_responses[message_id] = bot_message
                     self.latest_response = bot_message  # Fallback storage
 
+                    # Initialize stream position for this message
+                    self.stream_positions[message_id] = 0
+
                     if self.valves.debug:
                         print(f"✓ Stored response for message_id: {message_id}")
                         print(f"✓ Stored as latest_response (fallback)")
+                        print(f"✓ Initialized stream position to 0")
                         print(f"Success: {result.get('success')}")
                         print(f"Ticket mode: {result.get('ticket_mode')}")
                         print(f"Ticket ready: {result.get('ticket_ready')}")
 
-                    # Replace the user message with instruction for model to echo
+                    # Give the LLM a minimal instruction to avoid it generating content
                     last_message["content"] = (
-                        f"[SYSTEM: Reply with exactly the following text, nothing more, nothing less]\n\n{bot_message}"
+                        "[SYSTEM: Output exactly: 'OK']"
                     )
                 else:
                     error_msg = "Error: No message in bot response"
@@ -116,8 +126,9 @@ class Filter:
                         print(f"Full response: {json.dumps(result, indent=2)}")
                     self.bot_responses[message_id] = error_msg
                     self.latest_response = error_msg
+                    self.stream_positions[message_id] = 0
                     last_message["content"] = (
-                        f"[SYSTEM: Reply with exactly the following text] {error_msg}"
+                        "[SYSTEM: Output exactly: 'OK']"
                     )
             else:
                 error_msg = f"Error: FastAPI bot returned status {response.status_code}"
@@ -125,8 +136,9 @@ class Filter:
                 print(f"Response body: {response.text}")
                 self.bot_responses[message_id] = error_msg
                 self.latest_response = error_msg
+                self.stream_positions[message_id] = 0
                 last_message["content"] = (
-                    f"[SYSTEM: Reply with exactly the following text] {error_msg}"
+                    "[SYSTEM: Output exactly: 'OK']"
                 )
 
         except Exception as e:
@@ -137,19 +149,83 @@ class Filter:
             traceback.print_exc()
             self.bot_responses[message_id] = error_msg
             self.latest_response = error_msg
+            self.stream_positions[message_id] = 0
             last_message["content"] = (
-                f"[SYSTEM: Reply with exactly the following text] {error_msg}"
+                "[SYSTEM: Output exactly: 'OK']"
             )
 
         if self.valves.debug:
             print(f"Stored message_ids: {list(self.bot_responses.keys())}")
             print(f"Latest response available: {self.latest_response is not None}")
+            print(f"Stream positions: {self.stream_positions}")
             print("=" * 60 + "\n")
 
         return body
 
+    def stream(self, event: dict) -> dict:
+        """Stream bot response character by character"""
+        if self.valves.debug:
+            print(f"STREAM EVENT: {event}")
+
+        # Try to find which message_id this stream belongs to
+        # We'll use the latest_response as indicator that we have a bot response to stream
+        message_id = None
+        bot_response = None
+
+        # Find the message_id for this stream
+        for mid in self.stream_positions.keys():
+            if mid in self.bot_responses:
+                message_id = mid
+
+                bot_response = self.bot_responses[mid]
+
+                break
+
+        # Fallback: use latest_response if no message_id found
+        if bot_response is None and self.latest_response is not None:
+            bot_response = self.latest_response
+            message_id = "default"
+
+            if message_id not in self.stream_positions:
+                self.stream_positions[message_id] = 0
+
+        # Replace the LLM's streaming content with our bot response
+        for choice in event.get("choices", []):
+            delta = choice.get("delta", {})
+
+            if "content" in delta and bot_response and message_id:
+                # Get current position
+                position = self.stream_positions.get(message_id, 0)
+
+                # Get the next chunk of characters
+                chunk_size = self.valves.stream_speed
+                next_chunk = bot_response[position:position + chunk_size]
+
+                if next_chunk:
+                    # Replace with our chunk
+                    delta["content"] = next_chunk
+
+                    # Update position
+                    self.stream_positions[message_id] = position + len(next_chunk)
+
+                    if self.valves.debug:
+                        print(
+                            f"✓ Streaming chunk: '{next_chunk}' (pos: {position} -> {self.stream_positions[message_id]})")
+                else:
+                    # No more content to stream
+                    delta["content"] = ""
+
+                    if self.valves.debug:
+                        print(f"✓ Finished streaming for message_id: {message_id}")
+
+            elif "content" in delta:
+                # Suppress LLM content if we don't have a bot response yet
+                delta["content"] = ""
+
+        return event
+
     def outlet(self, body: dict):
-        """Intercept model response and replace with bot response"""
+        """Clean up after streaming is complete"""
         if self.valves.debug:
             print("\n" + "=" * 60)
             print("OUTLET CALLED")
@@ -167,33 +243,46 @@ class Filter:
         # Try to get response by message_id first
         if message_id in self.bot_responses:
             bot_response = self.bot_responses[message_id]
+
             if self.valves.debug:
                 print(f"✓ Found bot response for message_id: {message_id}")
+
             # Clean up
             del self.bot_responses[message_id]
+
+            if message_id in self.stream_positions:
+                del self.stream_positions[message_id]
+
         # Fallback to latest response if message_id doesn't match
         elif self.latest_response is not None:
             bot_response = self.latest_response
+
             if self.valves.debug:
                 print(f"⚠ Message ID mismatch - using latest_response as fallback")
+
             # Clean up
             self.latest_response = None
+
+            if message_id in self.stream_positions:
+                del self.stream_positions[message_id]
+
         else:
             if self.valves.debug:
                 print("⚠ No bot response found")
 
-        # Replace the model's response if we found one
+        # Ensure the final message is the complete bot response
         if bot_response:
             if self.valves.debug:
                 print(f"Response preview: {bot_response[:100]}...")
 
             messages = body.get("messages", [])
+
             if messages:
-                # Replace the last assistant message
+                # Replace the last assistant message with complete response
                 messages[-1]["content"] = bot_response
 
             if self.valves.debug:
-                print(f"✓ Replaced model output with bot response")
+                print(f"✓ Set final message to complete bot response")
 
         if self.valves.debug:
             print("=" * 60 + "\n")

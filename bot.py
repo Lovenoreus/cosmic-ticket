@@ -1093,6 +1093,236 @@ Conversation History:
     return updated_state
 
 
+def create_ticket_without_known_question(state: AgentState) -> AgentState:
+    """Create a ticket when no known question template is found"""
+    logger.info("=" * 80)
+    logger.info("CREATE TICKET WITHOUT KNOWN QUESTION")
+    logger.info("=" * 80)
+
+    # Get user problem and conversation history
+    user_problem = state.get("last_cosmic_query", "")
+    if not user_problem:
+        user_problem = state.get("user_input", "")
+    
+    conversation_history = state.get("conversation_history", [])
+    user_input = state.get("user_input", "")
+
+    logger.info(f"Creating ticket for problem: {user_problem[:100]}...")
+
+    # Format conversation history as strings
+    conversation_history_str = []
+    for msg in conversation_history:
+        if isinstance(msg, HumanMessage):
+            conversation_history_str.append(f"User: {msg.content}")
+        elif isinstance(msg, AIMessage):
+            conversation_history_str.append(f"AI Assistant: {msg.content}")
+
+    # Add current user input if not already in history
+    if user_input:
+        user_input_str = f"User: {user_input}"
+        if not any(msg == user_input_str for msg in conversation_history_str):
+            conversation_history_str.append(user_input_str)
+
+    logger.debug(f"Conversation history: {len(conversation_history_str)} messages")
+
+    # Generate ticket title and description using a single LLM call
+    logger.debug("Generating ticket title and description")
+    combined_prompt = """You are a ticket generator. Your task is to create both a title and description for a support ticket based on:
+1. The user's problem description
+2. The conversation history
+
+For the title:
+- Be 3-10 words long
+- Be as short as possible without sacrificing meaning
+- Accurately describe the problem
+- Use lowercase letters and underscores instead of spaces
+- Be suitable for use as a filename
+
+Title examples:
+- "broken printer" -> "broken_printer"
+- "HSAID configuration issue" -> "hsaid_configuration_issue"
+- "ambulance station mapping problem" -> "ambulance_station_mapping"
+- "patient registration error" -> "patient_registration_error"
+
+For the description:
+- Include all key information from the conversation
+- Be concise but comprehensive
+- Be written in clear, professional language
+- Focus on the problem and relevant details
+
+Return ONLY a valid JSON object with this structure:
+{
+  "title": "ticket_title_here",
+  "description": "comprehensive description here"
+}"""
+
+    # Build context for generation
+    context_parts = [f"User Problem: {user_problem}"]
+    context_parts.append("\nConversation History:")
+    context_parts.append("\n".join(conversation_history_str))
+    context = "\n".join(context_parts)
+
+    user_prompt = f"""Generate both a title and description for this support ticket:
+
+{context}
+
+Return a JSON object with "title" and "description" fields."""
+
+    try:
+        messages = [
+            SystemMessage(content=combined_prompt),
+            HumanMessage(content=user_prompt)
+        ]
+        response = llm.invoke(messages)
+        response_text = response.content.strip()
+        
+        # Parse JSON response
+        result = parse_json_from_response(response_text)
+        
+        ticket_title = result.get("title", "").strip()
+        summary = result.get("description", "").strip()
+        
+        # Clean up title: remove quotes, convert to lowercase, replace spaces with underscores
+        ticket_title = ticket_title.strip('"\'')
+        ticket_title = ticket_title.lower().replace(" ", "_")
+        # Remove any special characters except underscores and hyphens
+        ticket_title = re.sub(r'[^a-z0-9_-]', '', ticket_title)
+        # Ensure it's not empty
+        if not ticket_title:
+            ticket_title = "support_ticket"
+        
+        # Ensure description is not empty
+        if not summary:
+            summary = user_problem
+            if conversation_history_str:
+                summary += "\n\nConversation History:\n" + "\n".join(conversation_history_str[:5])
+        
+        logger.info(f"Generated ticket title: {ticket_title}")
+        logger.info(f"Generated description: {len(summary)} characters")
+    except Exception as e:
+        # Fallback values
+        logger.error(f"Title and description generation failed: {e}", exc_info=True)
+        ticket_title = "support_ticket"
+        summary = user_problem
+        if conversation_history_str:
+            summary += "\n\nConversation History:\n" + "\n".join(conversation_history_str[:5])
+
+    # Generate UUID
+    ticket_uuid = str(uuid.uuid4())
+    logger.info(f"Generated ticket UUID: {ticket_uuid}")
+
+    # Default values for ticket creation
+    assigned_queue = "Technical Support"
+    category = "General Support"
+    priority = "High"
+    name = "Love Noreus"
+
+    logger.debug(f"Ticket details - Queue: {assigned_queue}, Category: {category}, Priority: {priority}")
+
+    # Format conversation history for Jira description
+    conversation_history_formatted = "\n".join(conversation_history_str)
+
+    # Format description according to requirements
+    ticket_title_display = ticket_title.replace("_", " ")
+    description = f"""Summary:
+
+{summary}
+
+Assigned Queue:
+
+{assigned_queue}
+
+Priority:
+
+{priority}
+
+Name:
+
+{name}
+
+Category:
+
+{category}
+
+Conversation Topic:
+
+{ticket_title_display}
+
+Conversation History: 
+
+{conversation_history_formatted}"""
+
+    # Build ticket data
+    ticket_data = {
+        "ticket_title": ticket_title,
+        "ticket_uuid": ticket_uuid,
+        "description": user_problem,
+        "category": category,
+        "assigned_queue": assigned_queue,
+        "priority": priority,
+        "conversation_history": conversation_history_str
+    }
+
+    # Save ticket to file
+    tickets_dir = Path(__file__).parent / "tickets"
+    tickets_dir.mkdir(exist_ok=True)
+
+    filename = f"{ticket_title}_{ticket_uuid}.json"
+    filepath = tickets_dir / filename
+
+    logger.info(f"Saving ticket to: {filepath}")
+
+    # Create Jira ticket
+    jira_result = None
+    try:
+        logger.info("Creating Jira ticket")
+        jira_result = create_jira_ticket(
+            conversation_topic=ticket_title_display,
+            description=description,
+            queue=assigned_queue,
+            priority=priority,
+            name=name,
+            category=category
+        )
+
+        if jira_result.get("success"):
+            logger.info(f"Jira ticket created successfully: {jira_result.get('key', 'Unknown')}")
+        else:
+            logger.error(f"Jira ticket creation failed: {jira_result.get('error', 'Unknown error')}")
+    except Exception as e:
+        logger.error(f"Error creating Jira ticket: {e}", exc_info=True)
+        jira_result = {"success": False, "error": str(e)}
+
+    # Save JSON ticket to file
+    try:
+        with open(filepath, "w", encoding="utf-8") as f:
+            json.dump(ticket_data, f, indent=2, ensure_ascii=False)
+
+        logger.info(f"Ticket saved successfully to: {filepath}")
+
+        # Generate bot response
+        jira_info = ""
+        if jira_result and jira_result.get("success"):
+            jira_key = jira_result.get("key", "Unknown")
+            jira_info = f"\nJira Ticket: {jira_key}"
+        elif jira_result and not jira_result.get("success"):
+            jira_info = f"\nJira Ticket: Failed to create ({jira_result.get('error', 'Unknown error')})"
+
+        bot_response = f"Ticket created successfully! Ticket ID: {ticket_uuid}\nTitle: {ticket_title_display.title()}\nSaved to: {filename}{jira_info}"
+
+    except Exception as e:
+        logger.error(f"Error saving ticket: {e}", exc_info=True)
+        bot_response = f"Error creating ticket: {str(e)}"
+
+    # Reset state to initial state after ticket creation
+    logger.info("Resetting conversation state after ticket creation")
+    updated_state = get_initial_state()
+    updated_state["bot_response"] = bot_response
+
+    logger.info("Ticket creation completed successfully")
+    return updated_state
+
+
 def route_after_intent(state: AgentState) -> str:
     """Route to appropriate agent based on detected intent"""
     intent = state.get("intent", {})
@@ -1145,6 +1375,7 @@ workflow.add_node("cosmic_search_agent", cosmic_search_agent)
 workflow.add_node("identify_known_question_agent", identify_known_question_agent)
 workflow.add_node("questioner_agent", questioner_agent)
 workflow.add_node("create_ticket", create_ticket)
+workflow.add_node("create_ticket_without_known_question", create_ticket_without_known_question)
 workflow.set_entry_point("detect_intent")
 workflow.add_conditional_edges(
     "detect_intent",
@@ -1160,9 +1391,17 @@ workflow.add_conditional_edges(
 workflow.add_edge("cosmic_search_agent", END)
 workflow.add_conditional_edges(
     "identify_known_question_agent",
-    lambda state: "questioner_agent" if state.get("questioning", False) else END,
+    lambda state: (
+        "questioner_agent" if state.get("questioning", False) 
+        else "create_ticket_without_known_question" if (
+            not state.get("known_problem_identified", True) and 
+            (state.get("last_cosmic_query") or state.get("user_input"))
+        )
+        else END
+    ),
     {
         "questioner_agent": "questioner_agent",
+        "create_ticket_without_known_question": "create_ticket_without_known_question",
         END: END
     }
 )
@@ -1180,12 +1419,13 @@ workflow.add_conditional_edges(
     }
 )
 workflow.add_edge("create_ticket", END)
+workflow.add_edge("create_ticket_without_known_question", END)
 
 # Compile the graph
 app = workflow.compile()
 
 logger.info("Workflow compiled successfully")
-logger.info("Nodes: detect_intent, cosmic_search_agent, identify_known_question_agent, questioner_agent, create_ticket")
+logger.info("Nodes: detect_intent, cosmic_search_agent, identify_known_question_agent, questioner_agent, create_ticket, create_ticket_without_known_question")
 logger.info("=" * 80)
 
 # Global state storage for multiple conversations (keyed by chat_id)

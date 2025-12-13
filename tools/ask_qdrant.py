@@ -255,12 +255,44 @@ def run_query(
             "reconstruction_method": "fallback_single_chunk"
         }
 
+    # FIXED: Convert section_id to int if it's a string, handle non-numeric strings
+    section_id_int = None
+    if isinstance(section_id, str):
+        # Try to convert string to int (e.g., "1" -> 1)
+        # If it's non-numeric (e.g., "1.1", "A9"), we'll skip surrounding chunks
+        try:
+            section_id_int = int(float(section_id))  # Handles "1.0" -> 1
+        except (ValueError, TypeError):
+            # Non-numeric section_id (like "1.1" or "A9") - skip surrounding chunks
+            fallback_text = payload.get("text", "")
+            return {
+                "results": merged,
+                "reconstructed_context": fallback_text,
+                "source_file": source_file,
+                "anchor_section_id": section_id,
+                "chunk_count": 1,
+                "reconstruction_method": "fallback_non_numeric_section_id"
+            }
+    elif isinstance(section_id, (int, float)):
+        section_id_int = int(section_id)
+    else:
+        # Unknown type, skip surrounding chunks
+        fallback_text = payload.get("text", "")
+        return {
+            "results": merged,
+            "reconstructed_context": fallback_text,
+            "source_file": source_file,
+            "anchor_section_id": section_id,
+            "chunk_count": 1,
+            "reconstruction_method": "fallback_unknown_section_id_type"
+        }
+
     # Fetch document neighbors
     surrounding = fetch_surrounding_chunks(
         client,
         collection,
         source_file,
-        section_id,
+        section_id_int,
         padding=SECTION_PADDING,
     )
 

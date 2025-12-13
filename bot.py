@@ -19,6 +19,7 @@ import logging
 # Add tools directory to path for imports
 sys.path.insert(0, str(Path(__file__).parent / "tools"))
 from tools.vector_database_tools import cosmic_database_tool2
+from tools.ask_qdrant import ask_question
 import config
 from jira_ticket_tool import create_jira_ticket
 
@@ -59,12 +60,9 @@ llm = ChatOpenAI(
 
 logger.info(f"LLM initialized with model: {os.getenv('AGENT_MODEL_NAME', 'gpt-4o-mini')}")
 
-# Load known questions
-KNOWN_QUESTIONS_PATH = Path(__file__).parent / "known_questions.json"
-with open(KNOWN_QUESTIONS_PATH, "r", encoding="utf8") as f:
-    KNOWN_QUESTIONS = json.load(f)
-
-logger.info(f"Loaded {len(KNOWN_QUESTIONS)} known question templates from {KNOWN_QUESTIONS_PATH}")
+# Known questions are now stored in Qdrant vector database
+# Collection name: config.KNOWN_QUESTIONS_COLLECTION_NAME
+logger.info(f"Known questions collection: {config.KNOWN_QUESTIONS_COLLECTION_NAME}")
 
 
 @dataclass
@@ -318,94 +316,71 @@ def identify_known_question_agent(state: AgentState) -> AgentState:
         updated_state["conversation_history"] = updated_history
         return updated_state
 
-    # Create a summary of all known question templates for the LLM
-    templates_summary = []
-    for idx, template in enumerate(KNOWN_QUESTIONS):
-        template_info = {
-            "index": idx,
-            "issue_category": template.get("issue_category", ""),
-            "description": template.get("description", ""),
-            "keywords": template.get("keywords", []),
-            "queue": template.get("queue", ""),
-            "urgency_level": template.get("urgency_level", ""),
-            "text": template.get("text", "")
-        }
-        templates_summary.append(template_info)
+    # Build search query from user problem and conversation context
+    search_query = user_problem
+    if conversation_context:
+        # Include conversation context in search query for better matching
+        search_query = f"{user_problem}\n{conversation_context}"
 
-    logger.debug(f"Matching against {len(templates_summary)} templates")
-
-    # Create prompt for matching
-    system_prompt = """You are a problem classification agent. Your task is to match a user's problem description to the most appropriate problem template from a list of known issue categories.
-
-You will be given:
-1. A user problem description (current message)
-2. Recent conversation history (last 10 messages) for additional context
-3. A list of problem templates, each with:
-   - issue_category: The category name
-   - description: Detailed description of what the category covers
-   - keywords: Relevant keywords for this category
-   - queue: Which department handles this
-   - urgency_level: Typical urgency
-   - text: Summary text
-
-Your job is to:
-1. Analyze BOTH the current problem description AND the conversation history
-2. Extract the actual problem from the conversation (the user might say "create a ticket" but the problem was mentioned earlier)
-3. Compare the problem against all available templates
-4. Consider keywords, descriptions, and context
-5. Select the BEST matching template based on semantic similarity and relevance
-6. Return ONLY a JSON object with the index of the matched template
-
-Return format:
-{
-  "matched_index": <integer index of the best matching template>,
-  "confidence": <float between 0.0 and 1.0 indicating match confidence>,
-  "reasoning": "<brief explanation of why this template matches>"
-}
-
-If no template is a good match (confidence < 0.5), return:
-{
-  "matched_index": -1,
-  "confidence": <low confidence value>,
-  "reasoning": "<explanation of why no good match was found>"
-}"""
-
-    # Format templates for the prompt
-    templates_text = json.dumps(templates_summary, indent=2)
-
-    user_prompt = f"""Current User Message:
-{user_problem}
-{conversation_context}
-
-Available Problem Templates:
-{templates_text}
-
-Analyze the user's problem (considering both current message and conversation history) and identify the best matching template. Return ONLY the JSON response."""
-
-    messages = [
-        SystemMessage(content=system_prompt),
-        HumanMessage(content=user_prompt)
-    ]
-
-    logger.debug("Invoking LLM for template matching")
-    response = llm.invoke(messages)
-    response_text = response.content.strip()
-    logger.debug(f"LLM response: {response_text[:200]}...")
-
-    # Parse the response
+    logger.debug(f"Searching known questions collection: {config.KNOWN_QUESTIONS_COLLECTION_NAME}")
+    
+    # Perform vector search in Qdrant
     try:
-        match_result = parse_json_from_response(response_text, default={"matched_index": -1, "confidence": 0.0,
-                                                                        "reasoning": "Failed to parse response"})
-        matched_index = match_result.get("matched_index", -1)
-        confidence = match_result.get("confidence", 0.0)
-        reasoning = match_result.get('reasoning', 'No reasoning provided')
+        # Use ask_question to search the known_questions collection
+        # We only need the top result (limit=1)
+        # ask_question is a synchronous function, so we call it directly
+        search_result = ask_question(
+            search_query,
+            collection=config.KNOWN_QUESTIONS_COLLECTION_NAME,
+            limit=1,
+            qdrant_host=config.QDRANT_HOST,
+            qdrant_port=config.QDRANT_PORT,
+            openai_api_key=config.OPENAI_API_KEY if not config.USE_OLLAMA else None,
+            ollama_model=config.EMBEDDINGS_MODEL_NAME if config.USE_OLLAMA else None,
+            ollama_base_url=config.OLLAMA_BASE_URL if config.USE_OLLAMA else None
+        )
 
-        logger.info(f"Match result - Index: {matched_index}, Confidence: {confidence}")
-        logger.debug(f"Reasoning: {reasoning}")
+        # Extract results from search
+        results = search_result.get("results", [])
+        
+        if not results:
+            logger.warning("No results found in known questions collection")
+            updated_state = dict(state)
+            updated_state["known_problem_identified"] = False
+            updated_state["match_confidence"] = 0.0
+            updated_state["bot_response"] = (
+                "I understand you want to create a ticket, but I'm having trouble identifying "
+                "the specific category for your issue. Could you please provide more details about "
+                "the problem you're experiencing? For example:\n"
+                "- Is it related to hardware (printer, computer, etc.)?\n"
+            )
+            # Update conversation history
+            user_input = state.get("user_input", "")
+            updated_history = list(conversation_history)
+            if not updated_history or not (
+                    isinstance(updated_history[-1], HumanMessage) and updated_history[-1].content == user_input):
+                updated_history.append(HumanMessage(content=user_input))
+            updated_history.append(AIMessage(content=updated_state["bot_response"]))
+            updated_state["conversation_history"] = updated_history
+            return updated_state
 
-        # If we have a valid match with reasonable confidence
-        if matched_index >= 0 and matched_index < len(KNOWN_QUESTIONS) and confidence >= 0.5:
-            matched_template = KNOWN_QUESTIONS[matched_index]
+        # Get the top result (highest score)
+        # results is a list of HybridResult objects
+        top_result = results[0]
+        confidence = float(top_result.score)
+        payload = top_result.payload or {}
+        
+        logger.info(f"Top match - Score: {confidence}, Issue Category: {payload.get('issue_category', 'Unknown')}")
+
+        # Use confidence threshold (0.5) to determine if match is good enough
+        # Note: Qdrant cosine similarity scores are typically 0.0-1.0, where 1.0 is perfect match
+        # We'll use 0.5 as the threshold (can be adjusted based on testing)
+        min_confidence = 0.5
+        
+        if confidence >= min_confidence:
+            # Extract template from payload (all template fields are stored in payload)
+            matched_template = payload
+            
             logger.info(f"Successfully matched template: {matched_template.get('issue_category', 'Unknown')}")
 
             # Initialize questions from the matched template
@@ -432,8 +407,8 @@ Analyze the user's problem (considering both current message and conversation hi
             logger.info("Questioning mode activated")
             return updated_state
         else:
-            # Low confidence or no match
-            logger.warning(f"Low confidence match or no match found (confidence: {confidence})")
+            # Low confidence match
+            logger.warning(f"Low confidence match (score: {confidence}, threshold: {min_confidence})")
             updated_state = dict(state)
             updated_state["known_problem_identified"] = False
             updated_state["match_confidence"] = confidence

@@ -820,6 +820,46 @@ Analyze the user's message and identify which questions they are answering. Retu
     return updated_state
 
 
+def format_conversation_history_for_ticket(conversation_history: List[BaseMessage], user_input: str = "") -> List[str]:
+    """
+    Format conversation history for ticket, filtering out:
+    - Intent detection messages (JSON with "mode" field)
+    - Duplicate consecutive messages (same content appearing twice in a row)
+    - Internal system messages
+    """
+    conversation_history_str = []
+    
+    for msg in conversation_history:
+        if isinstance(msg, HumanMessage):
+            msg_str = f"User: {msg.content}"
+            # Skip if this is a duplicate of the last message in the list
+            if not conversation_history_str or conversation_history_str[-1] != msg_str:
+                conversation_history_str.append(msg_str)
+        elif isinstance(msg, AIMessage):
+            # Skip intent detection messages (JSON with "mode" field)
+            try:
+                content_json = json.loads(msg.content)
+                if isinstance(content_json, dict) and "mode" in content_json:
+                    # This is an intent detection message, skip it
+                    continue
+            except (json.JSONDecodeError, TypeError):
+                # Not JSON, include it as a normal message
+                pass
+            
+            # Include the message if it's not a duplicate
+            msg_str = f"AI Assistant: {msg.content}"
+            if not conversation_history_str or conversation_history_str[-1] != msg_str:
+                conversation_history_str.append(msg_str)
+    
+    # Add current user input if not already in history and not duplicate
+    if user_input:
+        user_input_str = f"User: {user_input}"
+        if not conversation_history_str or conversation_history_str[-1] != user_input_str:
+            conversation_history_str.append(user_input_str)
+    
+    return conversation_history_str
+
+
 def create_ticket(state: AgentState) -> AgentState:
     """Create ticket agent that generates ticket title and saves ticket JSON file"""
     logger.info("=" * 80)
@@ -908,19 +948,8 @@ Generate a short, descriptive title (3-10 words, use underscores instead of spac
     ticket_uuid = str(uuid.uuid4())
     logger.info(f"Generated ticket UUID: {ticket_uuid}")
 
-    # Format conversation history as strings
-    conversation_history_str = []
-    for msg in conversation_history:
-        if isinstance(msg, HumanMessage):
-            conversation_history_str.append(f"User: {msg.content}")
-        elif isinstance(msg, AIMessage):
-            conversation_history_str.append(f"AI Assistant: {msg.content}")
-
-    # Add current user input if not already in history
-    if user_input:
-        user_input_str = f"User: {user_input}"
-        if not any(msg == user_input_str for msg in conversation_history_str):
-            conversation_history_str.append(user_input_str)
+    # Format conversation history as strings, filtering out intent detection messages and duplicates
+    conversation_history_str = format_conversation_history_for_ticket(conversation_history, user_input)
 
     logger.debug(f"Conversation history: {len(conversation_history_str)} messages")
 
@@ -1109,19 +1138,8 @@ def create_ticket_without_known_question(state: AgentState) -> AgentState:
 
     logger.info(f"Creating ticket for problem: {user_problem[:100]}...")
 
-    # Format conversation history as strings
-    conversation_history_str = []
-    for msg in conversation_history:
-        if isinstance(msg, HumanMessage):
-            conversation_history_str.append(f"User: {msg.content}")
-        elif isinstance(msg, AIMessage):
-            conversation_history_str.append(f"AI Assistant: {msg.content}")
-
-    # Add current user input if not already in history
-    if user_input:
-        user_input_str = f"User: {user_input}"
-        if not any(msg == user_input_str for msg in conversation_history_str):
-            conversation_history_str.append(user_input_str)
+    # Format conversation history as strings, filtering out intent detection messages and duplicates
+    conversation_history_str = format_conversation_history_for_ticket(conversation_history, user_input)
 
     logger.debug(f"Conversation history: {len(conversation_history_str)} messages")
 
